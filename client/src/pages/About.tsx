@@ -2,6 +2,10 @@ export default function About() {
   return (
     <div className="about-page">
       <div className="about-content">
+        <p className="about-welcome">
+          Welcome to Penny's Arcade. I've made some games for you to play.
+        </p>
+
         <section className="about-section">
           <h2>The Vision</h2>
           <p>
