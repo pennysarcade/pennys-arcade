@@ -43,7 +43,7 @@ export default function About() {
             pull requests.
           </p>
           <a
-            href="https://github.com/dan057/pennys-arcade"
+            href="https://github.com/pennysarcade/pennys-arcade"
             target="_blank"
             rel="noopener noreferrer"
             className="btn btn-primary"

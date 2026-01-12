@@ -6,7 +6,7 @@
 - **DNS:** Cloudflare
 
 ## How it works
-- Code is pushed to GitHub: https://github.com/dan057/pennys-arcade
+- Code is pushed to GitHub: https://github.com/pennysarcade/pennys-arcade
 - Railway auto-deploys from the `main` branch when changes are pushed
 - The `server` service runs both the Express backend and serves the React frontend
 
