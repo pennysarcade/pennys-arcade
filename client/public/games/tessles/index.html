@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500&display=swap" rel="stylesheet">
+<title>TESSLES</title>
+<link type="text/css" rel="stylesheet" href="css/style.css"/>
+</head>
+<body>
+<div id="gameContainer">
+<canvas id="gameCanvas"></canvas>
+<div id="welcomeScreen">
+<div id="instructionsText" class="instructions-text">Dodge the circles. Collect powerups.</div>
+<div id="highScoreText" class="highscore-text">HIGH SCORE: 0</div>
+<button id="startButton">Start <span id="enterSymbol">&#9166;</span></button>
+</div>
+<div id="timer" class="timer">0s</div>
+<div id="scoreDisplay" class="score-display">SCORE: 0</div>
+<div id="comboDisplay" class="combo-display">0x COMBO!</div>
+<div id="focusMeter" class="focus-meter">
+    <div class="focus-label">FOCUS</div>
+    <div class="focus-bar-container">
+        <div id="focusBar" class="focus-bar"></div>
+    </div>
+    <div class="focus-hint">[SPACE]</div>
+</div>
+<div id="powerUpIndicator" class="power-up-indicator"></div>
+<div id="copyright" class="copyright">&#169; 2026 Penny's Arcade</div>
+<div id="endGame">
+<div id="gameOverText" class="game-over-text">Game Over!</div>
+<div id="survivedText" class="survived-text">You survived 20 seconds</div>
+<button id="restartButton">Restart <span id="enterSymbol">&#9166;</span></button>
+</div>
+</div>
+<script type="text/javascript" src="js/script.js"></script>
+</body>
+</html>
