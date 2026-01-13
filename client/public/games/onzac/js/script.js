@@ -1162,9 +1162,7 @@ class BlackHole {
     }
 
     // Pull and consume zombies
-    const safeZone = getSafeZoneCoordinates();
-    const safeZoneCenterX = safeZone.x + CONFIG.safeZoneSize / 2;
-    const safeZoneCenterY = safeZone.y + CONFIG.safeZoneSize / 2;
+    // Reuse centerX/centerY from above, add safeZoneRadius for mobile check
     const safeZoneRadius = CONFIG.safeZoneSize / 2 + 20; // Buffer around safe zone
 
     for (let i = zombies.length - 1; i >= 0; i--) {
@@ -1190,7 +1188,7 @@ class BlackHole {
         // On mobile, don't pull zombies if it would drag them through the safe zone
         if (isMobileMode) {
           const distToSafeZone = Math.sqrt(
-            Math.pow(newX - safeZoneCenterX, 2) + Math.pow(newY - safeZoneCenterY, 2)
+            Math.pow(newX - centerX, 2) + Math.pow(newY - centerY, 2)
           );
           // Only pull if zombie won't enter safe zone area
           if (distToSafeZone > safeZoneRadius) {
