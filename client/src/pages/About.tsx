@@ -21,9 +21,9 @@ export default function About() {
             The platforms that dominate today are designed to hold your attention
             for as long as possible, and they'll enrage or stupefy you until they
             succeed. The communities that form on them feel transient and disposable.
-            I'm hoping to build something more durable—with regulars, inside jokes
-            that develop over months—and give a few people a place they feel like
-            they belong.
+            I'm hoping to build something more durable (complete with regulars, and
+            inside jokes that develop over months) and give a few people a place
+            they feel like they belong.
           </p>
 
           <p>
