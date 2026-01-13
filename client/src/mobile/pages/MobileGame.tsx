@@ -13,6 +13,7 @@ interface ExtendedGameConfig extends GameConfig {
 const GAME_PATHS: Record<string, string> = {
   'tessles': '/games/tessles/index.html',
   'onzac': '/games/onzac/index.html',
+  'hexgrid': '/games/hexgrid/index.html',
 }
 
 // Build game configs from GAMES array
@@ -253,11 +254,24 @@ export default function MobileGame() {
         setSessionStatus('idle')
         startSession(id)
       }
+      // Handle HEXGRID auth request
+      if (event.data?.type === 'HEXGRID_READY' && event.data?.game === 'hexgrid' && id === 'hexgrid') {
+        iframeRef.current?.contentWindow?.postMessage({
+          type: 'HEXGRID_AUTH',
+          token: token,
+          user: {
+            id: user?.id,
+            username: user?.username,
+            avatarColor: user?.avatarColor,
+            avatarImage: user?.avatarImage
+          }
+        }, '*')
+      }
     }
 
     window.addEventListener('message', handleMessage)
     return () => window.removeEventListener('message', handleMessage)
-  }, [id, sessionId, submitScore, updateSessionScore, startSession, addTickerMessage])
+  }, [id, sessionId, submitScore, updateSessionScore, startSession, addTickerMessage, token, user])
 
   if (!game) {
     return (

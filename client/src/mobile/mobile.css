@@ -295,6 +295,7 @@
 
 .mobile-game-card {
   display: block;
+  position: relative;
   background: var(--bg-card);
   border: 2px solid var(--border-color);
   text-decoration: none;
@@ -353,6 +354,41 @@
 .mobile-game-card-desc {
   font-size: 0.9rem;
   color: var(--text-secondary);
+}
+
+.mobile-game-card.disabled {
+  opacity: 0.5;
+}
+
+.mobile-game-card-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-heading);
+  font-size: 0.55rem;
+  color: var(--neon-orange);
+  text-transform: uppercase;
+  z-index: 5;
+}
+
+.mobile-game-card-lobby {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: rgba(0, 0, 0, 0.85);
+  padding: 3px 8px;
+  font-family: var(--font-heading);
+  font-size: 0.5rem;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  z-index: 10;
+  border-radius: 3px;
+  border: 1px solid var(--border-color);
 }
 
 /* ========================================

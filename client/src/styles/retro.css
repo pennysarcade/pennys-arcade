@@ -704,6 +704,79 @@ h3 {
   text-overflow: ellipsis;
 }
 
+/* Game Card Disabled State */
+.game-card-disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.game-card-disabled:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.game-card-disabled-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-heading);
+  font-size: 0.65rem;
+  color: var(--neon-orange);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  z-index: 10;
+}
+
+/* Game Card Lobby Status */
+.game-card-lobby-status {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.85);
+  padding: 4px 10px;
+  font-family: var(--font-heading);
+  font-size: 0.55rem;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  z-index: 10;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+}
+
+.lobby-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.lobby-dot.waiting {
+  background: var(--neon-green);
+  animation: lobby-pulse 1.5s ease-in-out infinite;
+}
+
+.lobby-dot.countdown {
+  background: var(--neon-orange);
+  animation: lobby-pulse 0.5s ease-in-out infinite;
+}
+
+.lobby-dot.playing {
+  background: var(--neon-cyan);
+}
+
+.lobby-dot.ending {
+  background: var(--neon-magenta);
+}
+
+@keyframes lobby-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
 /* Chat Sidebar */
 .chat-sidebar {
   min-width: 250px;
