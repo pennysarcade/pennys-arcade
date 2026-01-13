@@ -220,6 +220,24 @@ router.post('/session/end/:sessionId', authenticateToken, async (req, res) => {
           [session.game_id, userId, hsResult!.id]
         )
 
+        // Get high score for the game
+        const highScore = await queryOne<{ score: number, username: string }>(
+          'SELECT h.score, COALESCE(u.username, h.username) as username FROM high_scores h LEFT JOIN users u ON h.user_id = u.id WHERE h.game_id = $1 ORDER BY h.score DESC LIMIT 1',
+          [session.game_id]
+        )
+
+        // Get total plays today
+        const playsToday = await queryOne<{ count: string }>(
+          "SELECT COUNT(*) as count FROM game_sessions WHERE game_id = $1 AND started_at >= CURRENT_DATE",
+          [session.game_id]
+        )
+
+        // Get total unique players for this game
+        const totalPlayers = await queryOne<{ count: string }>(
+          'SELECT COUNT(DISTINCT user_id) as count FROM high_scores WHERE game_id = $1',
+          [session.game_id]
+        )
+
         const isPersonalBest = !personalBest?.best || score > personalBest.best
         const rankNum = parseInt(rank?.rank || '1')
         const isNewHighScore = rankNum === 1
@@ -239,6 +257,11 @@ router.post('/session/end/:sessionId', authenticateToken, async (req, res) => {
           rank: rankNum,
           isPersonalBest,
           isNewHighScore,
+          highScore: highScore?.score || score,
+          highScoreHolder: highScore?.username || user.username,
+          playsToday: parseInt(playsToday?.count || '1'),
+          totalPlayers: parseInt(totalPlayers?.count || '1'),
+          pointsFromHighScore: (highScore?.score || score) - score,
           status: 'completed'
         })
         return
@@ -549,6 +572,24 @@ router.post('/:gameId', authenticateToken, async (req, res) => {
       [gameId, userId, result!.id]
     )
 
+    // Get high score for the game
+    const highScoreData = await queryOne<{ score: number, username: string }>(
+      'SELECT h.score, COALESCE(u.username, h.username) as username FROM high_scores h LEFT JOIN users u ON h.user_id = u.id WHERE h.game_id = $1 ORDER BY h.score DESC LIMIT 1',
+      [gameId]
+    )
+
+    // Get total plays today
+    const playsToday = await queryOne<{ count: string }>(
+      "SELECT COUNT(*) as count FROM game_sessions WHERE game_id = $1 AND started_at >= CURRENT_DATE",
+      [gameId]
+    )
+
+    // Get total unique players for this game
+    const totalPlayers = await queryOne<{ count: string }>(
+      'SELECT COUNT(DISTINCT user_id) as count FROM high_scores WHERE game_id = $1',
+      [gameId]
+    )
+
     const isPersonalBest = !personalBest?.best || score > personalBest.best
     const rankNum = parseInt(rank?.rank || '1')
     const isNewHighScore = rankNum === 1
@@ -569,6 +610,11 @@ router.post('/:gameId', authenticateToken, async (req, res) => {
       isPersonalBest,
       isNewHighScore,
       score,
+      highScore: highScoreData?.score || score,
+      highScoreHolder: highScoreData?.username || user.username,
+      playsToday: parseInt(playsToday?.count || '1'),
+      totalPlayers: parseInt(totalPlayers?.count || '1'),
+      pointsFromHighScore: (highScoreData?.score || score) - score,
     })
   } catch (error) {
     console.error('[SCORE] Submit error:', error)
