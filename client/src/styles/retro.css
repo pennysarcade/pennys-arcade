@@ -1179,6 +1179,7 @@ h3 {
   padding: 0 0.75rem;
   width: 100%;
   height: 100%;
+  overflow: hidden;
 }
 
 .typewriter-text {
@@ -1187,16 +1188,16 @@ h3 {
   letter-spacing: 0.05em;
   text-transform: uppercase;
   white-space: nowrap;
-  overflow: hidden;
+  display: inline-block;
 }
 
 .typewriter-text.scrolling {
-  animation: tickerScroll 8s linear;
+  animation: tickerScroll 6s linear;
 }
 
 @keyframes tickerScroll {
-  0%, 10% { transform: translateX(0); }
-  90%, 100% { transform: translateX(var(--scroll-distance)); }
+  0%, 15% { transform: translateX(0); }
+  85%, 100% { transform: translateX(var(--scroll-distance)); }
 }
 
 .typewriter-info {

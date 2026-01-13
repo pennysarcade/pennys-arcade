@@ -55,10 +55,11 @@ export default function TypewriterTicker({ messages, onMessageComplete }: Typewr
       } else {
         // Typing complete, check if text overflows and needs scrolling
         if (containerRef.current && textRef.current) {
-          const containerWidth = containerRef.current.offsetWidth - 30 // account for padding
+          const containerWidth = containerRef.current.offsetWidth - 24 // account for padding
           const textWidth = textRef.current.scrollWidth
           if (textWidth > containerWidth) {
-            setScrollDistance(containerWidth - textWidth - 20) // negative value to scroll left
+            // Scroll left by the overflow amount (negative translateX)
+            setScrollDistance(-(textWidth - containerWidth))
             setIsScrolling(true)
           }
         }
