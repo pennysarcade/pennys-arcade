@@ -53,7 +53,11 @@ window.addEventListener('resize', () => {
 // Request auth from parent
 window.addEventListener('message', (event) => {
     if (event.data?.type === 'HEXGRID_AUTH') {
-        console.log('[HEXGRID] Received auth from parent');
+        console.log('[HEXGRID] Received auth from parent:', {
+            hasToken: !!event.data.token,
+            serverUrl: event.data.serverUrl,
+            user: event.data.user?.username
+        });
         authToken = event.data.token;
         serverUrl = event.data.serverUrl;
         currentUser = event.data.user;
@@ -73,6 +77,18 @@ function requestAuth() {
 }
 requestAuth();
 
+// Wait for Socket.io to be available
+function waitForSocketIO(callback, attempts = 0) {
+    if (typeof io !== 'undefined') {
+        callback();
+    } else if (attempts < 50) {
+        setTimeout(() => waitForSocketIO(callback, attempts + 1), 100);
+    } else {
+        console.error('[HEXGRID] Socket.io failed to load');
+        showError('Failed to load networking');
+    }
+}
+
 // Connect to server
 function connectToServer() {
     if (!authToken) {
@@ -82,36 +98,46 @@ function connectToServer() {
 
     console.log('[HEXGRID] Connecting to server:', serverUrl);
 
-    // Connect to Socket.io
-    socket = io(serverUrl, {
-        auth: { token: authToken }
+    // Wait for Socket.io to be available before connecting
+    waitForSocketIO(() => {
+        console.log('[HEXGRID] Socket.io loaded, creating connection...');
+
+        try {
+            socket = io(serverUrl, {
+                auth: { token: authToken }
+            });
+        } catch (err) {
+            console.error('[HEXGRID] Failed to create socket:', err);
+            showError('Connection failed');
+            return;
+        }
+
+        socket.on('connect', () => {
+            console.log('[HEXGRID] Connected to server');
+            localPlayerId = socket.id;
+
+            // Join the hexgrid lobby
+            socket.emit('hexgrid:join', { lobbyId: 'main' });
+        });
+
+        socket.on('connect_error', (err) => {
+            console.error('[HEXGRID] Connection error:', err);
+            showError('Connection failed');
+        });
+
+        socket.on('disconnect', () => {
+            console.log('[HEXGRID] Disconnected');
+            showConnecting();
+        });
+
+        // Hexgrid events
+        socket.on('hexgrid:lobby_update', handleLobbyUpdate);
+        socket.on('hexgrid:state_update', handleStateUpdate);
+        socket.on('hexgrid:player_eliminated', handlePlayerEliminated);
+        socket.on('hexgrid:territory_claimed', handleTerritoryClaimed);
+        socket.on('hexgrid:game_over', handleGameOver);
+        socket.on('hexgrid:error', handleError);
     });
-
-    socket.on('connect', () => {
-        console.log('Connected to server');
-        localPlayerId = socket.id;
-
-        // Join the hexgrid lobby
-        socket.emit('hexgrid:join', { lobbyId: 'main' });
-    });
-
-    socket.on('connect_error', (err) => {
-        console.error('Connection error:', err);
-        showError('Connection failed');
-    });
-
-    socket.on('disconnect', () => {
-        console.log('Disconnected');
-        showConnecting();
-    });
-
-    // Hexgrid events
-    socket.on('hexgrid:lobby_update', handleLobbyUpdate);
-    socket.on('hexgrid:state_update', handleStateUpdate);
-    socket.on('hexgrid:player_eliminated', handlePlayerEliminated);
-    socket.on('hexgrid:territory_claimed', handleTerritoryClaimed);
-    socket.on('hexgrid:game_over', handleGameOver);
-    socket.on('hexgrid:error', handleError);
 }
 
 // Show screens
