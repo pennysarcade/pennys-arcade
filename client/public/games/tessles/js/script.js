@@ -838,18 +838,18 @@ const SystemMessages = {
         return Date.now() - lastTime >= this.MESSAGE_COOLDOWN;
     },
 
-    show(messageType, text, priority = 'high') {
+    show(messageType, text) {
         if (!this.canShow(messageType)) return false;
         this.lastMessageTimes[messageType] = Date.now();
 
-        // Send to parent ticker with priority
+        // Send to parent ticker - all in-game messages are low priority
         if (window.parent !== window) {
             window.parent.postMessage({
                 type: 'TICKER_MESSAGE',
                 game: 'tessles',
                 message: text,
                 level: 'info',
-                priority: priority
+                priority: 'low'
             }, '*');
         }
         return true;
@@ -865,16 +865,16 @@ const SystemMessages = {
             if (circleCount >= 75) {
                 this.show('peak_enemies_75', '75+ enemies!');
             } else if (circleCount >= 50) {
-                this.show('peak_enemies_50', '50 enemies!', 'low');
+                this.show('peak_enemies_50', '50 enemies!');
             }
         }
 
         // Track time without power-up
         const timeSincePowerUp = (Date.now() - stats.lastPowerUpTime) / 1000;
         if (timeSincePowerUp >= 90 && elapsedSeconds >= 90) {
-            this.show('no_powerup_90', '90s no power-ups', 'low');
+            this.show('no_powerup_90', '90s no power-ups');
         } else if (timeSincePowerUp >= 60 && elapsedSeconds >= 60) {
-            this.show('no_powerup_60', '60s no power-ups', 'low');
+            this.show('no_powerup_60', '60s no power-ups');
         }
 
         // Track player idle time
@@ -883,7 +883,7 @@ const SystemMessages = {
         if (dx < 2 && dy < 2 && circleCount > 10) {
             stats.playerIdleFrames++;
             if (stats.playerIdleFrames >= 300) { // 5 seconds at 60fps
-                this.show('player_idle', 'Frozen?', 'low');
+                this.show('player_idle', 'Frozen?');
                 stats.playerIdleFrames = 0;
             }
         } else {
@@ -909,12 +909,12 @@ const SystemMessages = {
         } else if (score >= 5000 && !this.lastMessageTimes['score_5000']) {
             this.show('score_5000', '5K points!');
         } else if (score >= 2500 && !this.lastMessageTimes['score_2500']) {
-            this.show('score_2500', '2.5K points!', 'low');
+            this.show('score_2500', '2.5K points!');
         }
 
         // Wave milestones
         if (waveNumber === 5) {
-            this.show('waves_5', '5 waves!', 'low');
+            this.show('waves_5', '5 waves!');
         } else if (waveNumber === 10) {
             this.show('waves_10', '10 waves!');
         }
@@ -930,10 +930,10 @@ const SystemMessages = {
 
         // Dash stats
         if (stats.totalDashes === 10) {
-            this.show('dashes_10', '10 dashes', 'low');
+            this.show('dashes_10', '10 dashes');
         }
         if (stats.dashesWithNoEnemiesNearby >= 3) {
-            this.show('shadow_boxing', 'Shadow boxing?', 'low');
+            this.show('shadow_boxing', 'Shadow boxing?');
             stats.dashesWithNoEnemiesNearby = 0;
         }
 
@@ -956,7 +956,7 @@ const SystemMessages = {
 
         // Danger zone time
         if (stats.dangerZoneTime >= 900) { // 15 seconds at 60fps
-            this.show('danger_zone_15', 'Edge runner!', 'low');
+            this.show('danger_zone_15', 'Edge runner!');
         }
     },
 
@@ -971,9 +971,9 @@ const SystemMessages = {
         if (type === 'FURY' && count === 1) {
             this.show('first_fury', 'FURY MODE!');
         } else if (type === 'BOMB' && count === 5) {
-            this.show('bomb_5', '5 bombs collected', 'low');
+            this.show('bomb_5', '5 bombs collected');
         } else if (type === 'SHIELD' && count === 10) {
-            this.show('shield_10', '10 shields', 'low');
+            this.show('shield_10', '10 shields');
         }
     },
 
@@ -985,7 +985,7 @@ const SystemMessages = {
         if (stats.dashKills === 1) {
             this.show('first_dash_kill', 'Dash kill!');
         } else if (stats.dashKills === 5) {
-            this.show('dash_kills_5', '5 dash kills', 'low');
+            this.show('dash_kills_5', '5 dash kills');
         }
     },
 
@@ -1017,7 +1017,7 @@ const SystemMessages = {
         if (killCount >= 15) {
             this.show('bomb_mega', `MEGA BOMB: ${killCount}!`);
         } else if (killCount >= 10) {
-            this.show('bomb_big', `Bomb: ${killCount} kills`, 'low');
+            this.show('bomb_big', `Bomb: ${killCount} kills`);
         }
     },
 
@@ -1026,7 +1026,7 @@ const SystemMessages = {
         this.stats.mineKills++;
 
         if (this.stats.mineKills === 5) {
-            this.show('mine_5', '5 mine kills', 'low');
+            this.show('mine_5', '5 mine kills');
         }
     },
 
@@ -1071,7 +1071,7 @@ const SystemMessages = {
     onSplitterSpawn() {
         this.stats.splitterSpawns++;
         if (this.stats.splitterSpawns === 1) {
-            this.show('first_splitter', 'Splitter split!', 'low');
+            this.show('first_splitter', 'Splitter split!');
         }
     },
 };

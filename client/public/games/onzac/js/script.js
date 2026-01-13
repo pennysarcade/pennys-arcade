@@ -1511,18 +1511,18 @@ const SystemMessages = {
     return Date.now() - lastTime >= this.MESSAGE_COOLDOWN;
   },
 
-  show(messageType, text, priority = 'high') {
+  show(messageType, text) {
     if (!this.canShow(messageType)) return false;
     this.lastMessageTimes[messageType] = Date.now();
 
-    // Send to parent ticker with priority
+    // Send to parent ticker - all in-game messages are low priority
     if (window.parent !== window) {
       window.parent.postMessage({
         type: 'TICKER_MESSAGE',
         game: 'onzac',
         message: text,
         level: 'info',
-        priority: priority
+        priority: 'low'
       }, '*');
     }
     return true;
@@ -1538,7 +1538,7 @@ const SystemMessages = {
       if (zombieCount >= 50) {
         this.show('peak_zombies_50', '50+ zombies!');
       } else if (zombieCount >= 30) {
-        this.show('peak_zombies_30', '30 zombies!', 'low');
+        this.show('peak_zombies_30', '30 zombies!');
       }
     }
 
@@ -1560,7 +1560,7 @@ const SystemMessages = {
     if (turretEnergy >= maxEnergy * 0.95) {
       stats.timeAtMaxEnergy++;
       if (stats.timeAtMaxEnergy >= 300) { // 5 seconds
-        this.show('max_energy_idle', 'Full energy', 'low');
+        this.show('max_energy_idle', 'Full energy');
         stats.timeAtMaxEnergy = 0;
       }
     } else {
@@ -1578,7 +1578,7 @@ const SystemMessages = {
 
     // Kill milestones
     if (gameState.zombiesKilled === 50) {
-      this.show('kills_50', '50 kills!', 'low');
+      this.show('kills_50', '50 kills!');
     } else if (gameState.zombiesKilled === 100) {
       this.show('kills_100', '100 kills!');
     } else if (gameState.zombiesKilled === 200) {
@@ -1589,7 +1589,7 @@ const SystemMessages = {
     if (gameState.score >= 5000 && !this.lastMessageTimes['score_5000']) {
       this.show('score_5000', '5K points!');
     } else if (gameState.score >= 2000 && !this.lastMessageTimes['score_2000']) {
-      this.show('score_2000', '2K points!', 'low');
+      this.show('score_2000', '2K points!');
     }
 
     // Survivor status
@@ -1612,18 +1612,18 @@ const SystemMessages = {
 
     // Weapon usage milestones
     if (stats.weaponKills.flame === 50) {
-      this.show('flame_50', 'Flame: 50 kills', 'low');
+      this.show('flame_50', 'Flame: 50 kills');
     }
     if (stats.weaponKills.lightning === 20) {
-      this.show('lightning_20', 'Lightning: 20 kills', 'low');
+      this.show('lightning_20', 'Lightning: 20 kills');
     }
     if (stats.weaponKills.ball === 30) {
-      this.show('ball_30', 'Cannon: 30 kills', 'low');
+      this.show('ball_30', 'Cannon: 30 kills');
     }
 
     // Weapon switch spam
     if (stats.weaponSwitches >= 15) {
-      this.show('switch_spam', 'Indecisive?', 'low');
+      this.show('switch_spam', 'Indecisive?');
       stats.weaponSwitches = 0;
     }
 
@@ -1631,12 +1631,12 @@ const SystemMessages = {
     if (stats.tankKills === 1) {
       this.show('first_tank', 'Tank down!');
     } else if (stats.tankKills === 5) {
-      this.show('tanks_5', '5 tanks!', 'low');
+      this.show('tanks_5', '5 tanks!');
     }
 
     // Fast zombie kills
     if (stats.fastKills === 10) {
-      this.show('fast_10', '10 fast zombies', 'low');
+      this.show('fast_10', '10 fast zombies');
     }
 
     // Black hole stats
@@ -1682,7 +1682,7 @@ const SystemMessages = {
 
     if (type === 'nuke') {
       if (zombieCount <= 1) {
-        this.show('nuke_overkill', 'Overkill?', 'low');
+        this.show('nuke_overkill', 'Overkill?');
       } else if (zombieCount >= 20) {
         this.show('nuke_massive', `NUKE: ${zombieCount}!`);
       }
@@ -1692,7 +1692,7 @@ const SystemMessages = {
     if (type === 'slowmo' && count === 1) {
       this.show('first_slowmo', 'Slow-mo!');
     } else if (type === 'nuke' && count === 3) {
-      this.show('nuke_3', '3 nukes used', 'low');
+      this.show('nuke_3', '3 nukes used');
     }
   },
 
@@ -1709,7 +1709,7 @@ const SystemMessages = {
   onSurvivorCloseCall() {
     this.stats.survivorCloseCallCount++;
     if (this.stats.survivorCloseCallCount % 3 === 1) {
-      this.show('survivor_close', 'Survivor close call', 'low');
+      this.show('survivor_close', 'Survivor close call');
     }
   },
 

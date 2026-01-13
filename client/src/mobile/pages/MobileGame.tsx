@@ -114,19 +114,11 @@ export default function MobileGame() {
       if (response.ok) {
         const data = await response.json()
         if (data.isNewHighScore) {
-          addTickerMessage(`NEW #1 HIGH SCORE! ${score.toLocaleString()} points!`, 'celebration')
-          addTickerMessage(`You are the champion! ${data.totalPlayers} players have competed`, 'info')
+          addTickerMessage(`NEW #1 HIGH SCORE! ${score.toLocaleString()} pts`, 'celebration')
         } else if (data.isPersonalBest) {
-          addTickerMessage(`New personal best! ${score.toLocaleString()} pts`, 'success')
-          addTickerMessage(`Ranked #${data.rank} - ${data.pointsFromHighScore.toLocaleString()} pts behind ${data.highScoreHolder}`, 'info')
+          addTickerMessage(`New personal best! ${score.toLocaleString()} pts (#${data.rank})`, 'success')
         } else {
-          addTickerMessage(`Score: ${score.toLocaleString()} pts - Ranked #${data.rank}`, 'success')
-          if (data.pointsFromHighScore > 0) {
-            addTickerMessage(`${data.pointsFromHighScore.toLocaleString()} pts to beat ${data.highScoreHolder}'s high score`, 'info')
-          }
-        }
-        if (data.playsToday > 1) {
-          addTickerMessage(`Game played ${data.playsToday} times today`, 'info')
+          addTickerMessage(`Score: ${score.toLocaleString()} pts (#${data.rank})`, 'success')
         }
         setSessionStatus('idle')
         setSessionId(null)
@@ -155,19 +147,11 @@ export default function MobileGame() {
       if (response.ok) {
         const data = await response.json()
         if (data.isNewHighScore) {
-          addTickerMessage(`NEW #1 HIGH SCORE! ${score.toLocaleString()} points!`, 'celebration')
-          addTickerMessage(`You are the champion! ${data.totalPlayers} players have competed`, 'info')
+          addTickerMessage(`NEW #1 HIGH SCORE! ${score.toLocaleString()} pts`, 'celebration')
         } else if (data.isPersonalBest) {
-          addTickerMessage(`New personal best! ${score.toLocaleString()} pts`, 'success')
-          addTickerMessage(`Ranked #${data.rank} - ${data.pointsFromHighScore.toLocaleString()} pts behind ${data.highScoreHolder}`, 'info')
+          addTickerMessage(`New personal best! ${score.toLocaleString()} pts (#${data.rank})`, 'success')
         } else {
-          addTickerMessage(`Score: ${score.toLocaleString()} pts - Ranked #${data.rank}`, 'success')
-          if (data.pointsFromHighScore > 0) {
-            addTickerMessage(`${data.pointsFromHighScore.toLocaleString()} pts to beat ${data.highScoreHolder}'s high score`, 'info')
-          }
-        }
-        if (data.playsToday > 1) {
-          addTickerMessage(`Game played ${data.playsToday} times today`, 'info')
+          addTickerMessage(`Score: ${score.toLocaleString()} pts (#${data.rank})`, 'success')
         }
         return true
       }

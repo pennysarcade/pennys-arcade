@@ -124,7 +124,6 @@ export default function Game() {
   const endSession = useCallback(async (currentSessionId: number, score: number, stats: unknown) => {
     console.log(`[SESSION] Ending session ${currentSessionId} with score ${score}`)
     setSessionStatus('ending')
-    addTickerMessage('Saving score...', 'info')
 
     try {
       const response = await fetch(`/api/scores/session/end/${currentSessionId}`, {
@@ -140,21 +139,13 @@ export default function Game() {
         const data = await response.json()
         console.log('[SESSION] Session ended successfully:', data)
 
-        // Show appropriate ticker message based on result
+        // Show single ticker message based on result
         if (data.isNewHighScore) {
-          addTickerMessage(`NEW #1 HIGH SCORE! ${score.toLocaleString()} points!`, 'celebration')
-          addTickerMessage(`You are the champion! ${data.totalPlayers} players have competed`, 'info')
+          addTickerMessage(`NEW #1 HIGH SCORE! ${score.toLocaleString()} pts`, 'celebration')
         } else if (data.isPersonalBest) {
-          addTickerMessage(`New personal best! ${score.toLocaleString()} pts`, 'success')
-          addTickerMessage(`Ranked #${data.rank} - ${data.pointsFromHighScore.toLocaleString()} pts behind ${data.highScoreHolder}`, 'info')
+          addTickerMessage(`New personal best! ${score.toLocaleString()} pts (#${data.rank})`, 'success')
         } else {
-          addTickerMessage(`Score: ${score.toLocaleString()} pts - Ranked #${data.rank}`, 'success')
-          if (data.pointsFromHighScore > 0) {
-            addTickerMessage(`${data.pointsFromHighScore.toLocaleString()} pts to beat ${data.highScoreHolder}'s high score`, 'info')
-          }
-        }
-        if (data.playsToday > 1) {
-          addTickerMessage(`Game played ${data.playsToday} times today`, 'info')
+          addTickerMessage(`Score: ${score.toLocaleString()} pts (#${data.rank})`, 'success')
         }
 
         setSessionStatus('idle')
@@ -165,13 +156,13 @@ export default function Game() {
         const errorData = await response.json().catch(() => ({}))
         console.error('[SESSION] Failed to end session:', response.status, errorData)
         setSessionStatus('error')
-        addTickerMessage('Failed to save score', 'error')
+        addTickerMessage('Score save failed', 'error')
         return false
       }
     } catch (error) {
       console.error('[SESSION] Error ending session:', error)
       setSessionStatus('error')
-      addTickerMessage('Network error saving score', 'error')
+      addTickerMessage('Score save failed', 'error')
       return false
     }
   }, [token, addTickerMessage])
@@ -194,32 +185,23 @@ export default function Game() {
         const data = await response.json()
         console.log('[SCORE] Direct submission successful:', data)
 
-        // Show appropriate ticker message based on result
+        // Show single ticker message based on result
         if (data.isNewHighScore) {
-          addTickerMessage(`NEW #1 HIGH SCORE! ${score.toLocaleString()} points!`, 'celebration')
-          addTickerMessage(`You are the champion! ${data.totalPlayers} players have competed`, 'info')
+          addTickerMessage(`NEW #1 HIGH SCORE! ${score.toLocaleString()} pts`, 'celebration')
         } else if (data.isPersonalBest) {
-          addTickerMessage(`New personal best! ${score.toLocaleString()} pts`, 'success')
-          addTickerMessage(`Ranked #${data.rank} - ${data.pointsFromHighScore.toLocaleString()} pts behind ${data.highScoreHolder}`, 'info')
+          addTickerMessage(`New personal best! ${score.toLocaleString()} pts (#${data.rank})`, 'success')
         } else {
-          addTickerMessage(`Score: ${score.toLocaleString()} pts - Ranked #${data.rank}`, 'success')
-          if (data.pointsFromHighScore > 0) {
-            addTickerMessage(`${data.pointsFromHighScore.toLocaleString()} pts to beat ${data.highScoreHolder}'s high score`, 'info')
-          }
-        }
-        if (data.playsToday > 1) {
-          addTickerMessage(`Game played ${data.playsToday} times today`, 'info')
+          addTickerMessage(`Score: ${score.toLocaleString()} pts (#${data.rank})`, 'success')
         }
         return true
       } else {
-        const errorData = await response.json().catch(() => ({}))
-        console.error('[SCORE] Direct submission failed:', response.status, errorData)
-        addTickerMessage(`Score: ${score} - ${errorData.message || 'Failed to save'}`, 'error')
+        console.error('[SCORE] Direct submission failed:', response.status)
+        addTickerMessage('Score save failed', 'error')
         return false
       }
     } catch (error) {
       console.error('[SCORE] Error in direct submission:', error)
-      addTickerMessage(`Score: ${score} - Network error`, 'error')
+      addTickerMessage('Score save failed', 'error')
       return false
     }
   }, [token, addTickerMessage])
