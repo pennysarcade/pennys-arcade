@@ -21,11 +21,6 @@ const GAME_CONFIGS: Record<string, GameConfig> = {
     description: 'Oh no, zombies are coming!',
     path: '/games/onzac/index.html'
   },
-  'hexgrid': {
-    title: 'HEXGRID',
-    description: 'Claim territory. Eliminate rivals!',
-    path: '/games/hexgrid/index.html'
-  },
 }
 
 // Add other games from GAMES array
@@ -338,29 +333,11 @@ export default function Game() {
         setSessionStatus('idle')
         startSession(id)
       }
-      // Handle HEXGRID auth request
-      if (event.data?.type === 'HEXGRID_READY' && event.data?.game === 'hexgrid' && id === 'hexgrid') {
-        console.log('[HEXGRID] Auth request received, sending credentials')
-        // In development, Socket.io server is on port 3001
-        // In production, it's the same origin
-        const serverUrl = import.meta.env.DEV ? 'http://localhost:3001' : window.location.origin
-        iframeRef.current?.contentWindow?.postMessage({
-          type: 'HEXGRID_AUTH',
-          token: token,
-          serverUrl: serverUrl,
-          user: {
-            id: user?.id,
-            username: user?.username,
-            avatarColor: user?.avatarColor,
-            avatarImage: user?.avatarImage
-          }
-        }, '*')
-      }
     }
 
     window.addEventListener('message', handleMessage)
     return () => window.removeEventListener('message', handleMessage)
-  }, [id, sessionId, submitScore, updateSessionScore, startSession, token, user, addTickerMessage])
+  }, [id, sessionId, submitScore, updateSessionScore, startSession, addTickerMessage])
 
   if (!game) {
     return (

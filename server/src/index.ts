@@ -12,7 +12,6 @@ import authRoutes from './routes/auth.js'
 import scoresRoutes from './routes/scores.js'
 import discordRoutes from './routes/discord.js'
 import { setupChatSocket } from './socket/chat.js'
-import { setupHexgridSocket } from './socket/hexgrid.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -94,8 +93,6 @@ async function startServer() {
 
   // Setup WebSocket handlers
   await setupChatSocket(io)
-  // HEXGRID - temporarily offline for further development
-  // await setupHexgridSocket(io)
 
   const PORT = process.env.PORT || 3001
 

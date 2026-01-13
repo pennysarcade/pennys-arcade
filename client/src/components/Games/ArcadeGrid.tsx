@@ -1,7 +1,5 @@
-import { useEffect, useState } from 'react'
-import GameCard, { LobbyStatus } from './GameCard'
+import GameCard from './GameCard'
 import { useAuth } from '../../context/AuthContext'
-import { useSocket } from '../../context/SocketContext'
 
 // Platform support types: 'both' | 'desktop' | 'mobile'
 export type PlatformSupport = 'both' | 'desktop' | 'mobile'
@@ -35,17 +33,6 @@ export const GAMES: GameConfig[] = [
     video: '/games/onzac/banner.webm',
     platforms: 'both',
   },
-  // HEXGRID - temporarily offline for further development
-  // {
-  //   id: 'hexgrid',
-  //   title: 'HEXGRID',
-  //   description: 'Claim territory. Eliminate rivals!',
-  //   banner: '/games/hexgrid/banner.jpg',
-  //   platforms: 'both',
-  //   requiresAuth: true,
-  //   multiplayer: true,
-  //   maxPlayers: 4,
-  // },
   { id: '03', title: 'Game 03', description: 'Under construction...' },
   { id: '04', title: 'Game 04', description: 'Under construction...' },
   { id: '05', title: 'Game 05', description: 'Under construction...' },
@@ -68,35 +55,6 @@ export const GAMES: GameConfig[] = [
 
 export default function ArcadeGrid() {
   const { user } = useAuth()
-  const { socket } = useSocket()
-  const [lobbyStatuses, setLobbyStatuses] = useState<Record<string, LobbyStatus>>({})
-
-  // Listen for hexgrid lobby status updates
-  useEffect(() => {
-    if (!socket) return
-
-    const handleLobbyStatus = (data: {
-      lobbyId: string
-      playerCount: number
-      maxPlayers: number
-      status: string
-    }) => {
-      setLobbyStatuses((prev) => ({
-        ...prev,
-        hexgrid: {
-          playerCount: data.playerCount,
-          maxPlayers: data.maxPlayers,
-          status: data.status as LobbyStatus['status'],
-        },
-      }))
-    }
-
-    socket.on('hexgrid:lobby_status', handleLobbyStatus)
-
-    return () => {
-      socket.off('hexgrid:lobby_status', handleLobbyStatus)
-    }
-  }, [socket])
 
   // Filter out mobile-only games for desktop view
   const desktopGames = GAMES.filter((game) => game.platforms !== 'mobile')
@@ -108,21 +66,6 @@ export default function ArcadeGrid() {
       {desktopGames.map((game) => {
         // Check if game requires auth and user is guest
         const requiresAuthButGuest = game.requiresAuth && isGuest
-        // Check if lobby is full (for multiplayer games)
-        const lobbyStatus = game.multiplayer ? lobbyStatuses[game.id] : undefined
-        const lobbyFull =
-          lobbyStatus && game.maxPlayers && lobbyStatus.playerCount >= game.maxPlayers
-
-        let disabled = false
-        let disabledReason: string | undefined
-
-        if (requiresAuthButGuest) {
-          disabled = true
-          disabledReason = 'Register to play'
-        } else if (lobbyFull) {
-          disabled = true
-          disabledReason = 'Lobby full'
-        }
 
         return (
           <GameCard
@@ -132,9 +75,8 @@ export default function ArcadeGrid() {
             description={game.description}
             banner={game.banner}
             video={game.video}
-            disabled={disabled}
-            disabledReason={disabledReason}
-            lobbyStatus={lobbyStatus}
+            disabled={requiresAuthButGuest}
+            disabledReason={requiresAuthButGuest ? 'Register to play' : undefined}
           />
         )
       })}

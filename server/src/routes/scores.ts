@@ -65,13 +65,14 @@ router.get('/user/me', authenticateToken, async (req, res) => {
   try {
     const userId = req.user!.userId
 
+    // Exclude offline/deprecated games from personal bests
     const scores = await query<{ game_id: string; score: number; plays: string }>(`
       SELECT game_id, MAX(score) as score, COUNT(*) as plays
       FROM high_scores
-      WHERE user_id = $1
+      WHERE user_id = $1 AND game_id NOT IN (${EXCLUDED_GAMES.map((_, i) => `$${i + 2}`).join(', ')})
       GROUP BY game_id
       ORDER BY score DESC
-    `, [userId])
+    `, [userId, ...EXCLUDED_GAMES])
 
     res.json({ scores })
   } catch (error) {
@@ -487,6 +488,12 @@ router.get('/:gameId', async (req, res) => {
   try {
     const { gameId } = req.params
     const limit = Math.min(parseInt(req.query.limit as string) || 10, 100)
+
+    // Block access to excluded games
+    if (EXCLUDED_GAMES.includes(gameId)) {
+      res.json({ scores: [] })
+      return
+    }
 
     // Use current username from users table, fall back to stored for deleted users
     const scores = await query<HighScore>(`

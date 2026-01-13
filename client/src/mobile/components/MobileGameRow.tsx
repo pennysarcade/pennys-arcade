@@ -1,41 +1,9 @@
-import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { GAMES, type GameConfig } from '../../components/Games/ArcadeGrid'
 import { useAuth } from '../../context/AuthContext'
-import { useSocket } from '../../context/SocketContext'
-import type { LobbyStatus } from '../../components/Games/GameCard'
 
 export default function MobileGameRow() {
   const { user } = useAuth()
-  const { socket } = useSocket()
-  const [lobbyStatuses, setLobbyStatuses] = useState<Record<string, LobbyStatus>>({})
-
-  // Listen for hexgrid lobby status updates
-  useEffect(() => {
-    if (!socket) return
-
-    const handleLobbyStatus = (data: {
-      lobbyId: string
-      playerCount: number
-      maxPlayers: number
-      status: string
-    }) => {
-      setLobbyStatuses((prev) => ({
-        ...prev,
-        hexgrid: {
-          playerCount: data.playerCount,
-          maxPlayers: data.maxPlayers,
-          status: data.status as LobbyStatus['status'],
-        },
-      }))
-    }
-
-    socket.on('hexgrid:lobby_status', handleLobbyStatus)
-
-    return () => {
-      socket.off('hexgrid:lobby_status', handleLobbyStatus)
-    }
-  }, [socket])
 
   const isGuest = user?.isGuest ?? true
 
@@ -52,8 +20,6 @@ export default function MobileGameRow() {
   const getGameState = (game: GameConfig) => {
     const isPlaceholder = !game.banner
     const requiresAuthButGuest = game.requiresAuth && isGuest
-    const lobbyStatus = game.multiplayer ? lobbyStatuses[game.id] : undefined
-    const lobbyFull = lobbyStatus && game.maxPlayers && lobbyStatus.playerCount >= game.maxPlayers
 
     let disabled = false
     let disabledReason: string | undefined
@@ -64,28 +30,18 @@ export default function MobileGameRow() {
     } else if (requiresAuthButGuest) {
       disabled = true
       disabledReason = 'Register to play'
-    } else if (lobbyFull) {
-      disabled = true
-      disabledReason = 'Lobby full'
     }
 
-    return { isPlaceholder, disabled, disabledReason, lobbyStatus }
+    return { isPlaceholder, disabled, disabledReason }
   }
 
   return (
     <div className="mobile-game-row">
       {sortedGames.map((game) => {
-        const { isPlaceholder, disabled, disabledReason, lobbyStatus } = getGameState(game)
+        const { isPlaceholder, disabled, disabledReason } = getGameState(game)
 
         const card = (
           <div className={`mobile-game-card ${isPlaceholder ? 'placeholder' : ''} ${disabled && !isPlaceholder ? 'disabled' : ''}`}>
-            {lobbyStatus && (
-              <div className="mobile-game-card-lobby">
-                <span className={`lobby-dot ${lobbyStatus.status}`}></span>
-                <span>{lobbyStatus.playerCount}/{lobbyStatus.maxPlayers}</span>
-              </div>
-            )}
-
             <div className="mobile-game-card-banner">
               {game.banner ? (
                 <img src={game.banner} alt={game.title} />
