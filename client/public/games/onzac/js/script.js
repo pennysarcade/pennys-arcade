@@ -1162,6 +1162,11 @@ class BlackHole {
     }
 
     // Pull and consume zombies
+    const safeZone = getSafeZoneCoordinates();
+    const safeZoneCenterX = safeZone.x + CONFIG.safeZoneSize / 2;
+    const safeZoneCenterY = safeZone.y + CONFIG.safeZoneSize / 2;
+    const safeZoneRadius = CONFIG.safeZoneSize / 2 + 20; // Buffer around safe zone
+
     for (let i = zombies.length - 1; i >= 0; i--) {
       const zombie = zombies[i];
       const zdx = this.x - zombie.x;
@@ -1177,10 +1182,26 @@ class BlackHole {
         zombies.splice(i, 1);
         triggerScreenShake(2);
       } else if (zdist < CONFIG.blackHolePullRange) {
-        // Pull zombie toward black hole
+        // Calculate potential new position
         const pullStrength = CONFIG.blackHolePullStrength * (1 - zdist / CONFIG.blackHolePullRange);
-        zombie.x += (zdx / zdist) * pullStrength;
-        zombie.y += (zdy / zdist) * pullStrength;
+        const newX = zombie.x + (zdx / zdist) * pullStrength;
+        const newY = zombie.y + (zdy / zdist) * pullStrength;
+
+        // On mobile, don't pull zombies if it would drag them through the safe zone
+        if (isMobileMode) {
+          const distToSafeZone = Math.sqrt(
+            Math.pow(newX - safeZoneCenterX, 2) + Math.pow(newY - safeZoneCenterY, 2)
+          );
+          // Only pull if zombie won't enter safe zone area
+          if (distToSafeZone > safeZoneRadius) {
+            zombie.x = newX;
+            zombie.y = newY;
+          }
+        } else {
+          // Desktop: normal pull behavior
+          zombie.x = newX;
+          zombie.y = newY;
+        }
       }
     }
   }
@@ -1743,33 +1764,49 @@ function deployBlackHole() {
 }
 
 function spawnBlackHole() {
-  // Spawn from random edge
-  const spawnPoints = [
-    { x: -50, y: -50 },
-    { x: canvas.width + 50, y: -50 },
-    { x: canvas.width + 50, y: canvas.height + 50 },
-    { x: -50, y: canvas.height + 50 },
-    { x: canvas.width / 2, y: -50 },
-    { x: canvas.width + 50, y: canvas.height / 2 },
-    { x: canvas.width / 2, y: canvas.height + 50 },
-    { x: -50, y: canvas.height / 2 },
-  ];
+  let spawnPoint, target;
 
-  const spawnPoint = spawnPoints[Math.floor(Math.random() * spawnPoints.length)];
+  if (isMobileMode) {
+    // Mobile: spawn from top and position at center top, just above safe zone
+    // This keeps it visible and prevents pulling zombies through the safe zone
+    const safeZone = getSafeZoneCoordinates();
+    const safeZoneTop = safeZone.y;
 
-  // Target halfway between center and edge (avoids safe zone in center)
-  // These positions keep the black hole in the outer ring of the play area
-  const midpointTargets = [
-    { x: canvas.width / 4, y: canvas.height / 4 },           // Top-left quadrant
-    { x: canvas.width * 3/4, y: canvas.height / 4 },         // Top-right quadrant
-    { x: canvas.width / 4, y: canvas.height * 3/4 },         // Bottom-left quadrant
-    { x: canvas.width * 3/4, y: canvas.height * 3/4 },       // Bottom-right quadrant
-    { x: canvas.width / 4, y: canvas.height / 2 },           // Left side
-    { x: canvas.width * 3/4, y: canvas.height / 2 },         // Right side
-    { x: canvas.width / 2, y: canvas.height / 4 },           // Top side
-    { x: canvas.width / 2, y: canvas.height * 3/4 },         // Bottom side
-  ];
-  const target = midpointTargets[Math.floor(Math.random() * midpointTargets.length)];
+    spawnPoint = { x: canvas.width / 2, y: -50 };
+    // Position just above the safe zone (with buffer for pull range)
+    target = {
+      x: canvas.width / 2,
+      y: Math.max(80, safeZoneTop - CONFIG.blackHolePullRange - 30)
+    };
+  } else {
+    // Desktop: spawn from random edge
+    const spawnPoints = [
+      { x: -50, y: -50 },
+      { x: canvas.width + 50, y: -50 },
+      { x: canvas.width + 50, y: canvas.height + 50 },
+      { x: -50, y: canvas.height + 50 },
+      { x: canvas.width / 2, y: -50 },
+      { x: canvas.width + 50, y: canvas.height / 2 },
+      { x: canvas.width / 2, y: canvas.height + 50 },
+      { x: -50, y: canvas.height / 2 },
+    ];
+
+    spawnPoint = spawnPoints[Math.floor(Math.random() * spawnPoints.length)];
+
+    // Target halfway between center and edge (avoids safe zone in center)
+    // These positions keep the black hole in the outer ring of the play area
+    const midpointTargets = [
+      { x: canvas.width / 4, y: canvas.height / 4 },           // Top-left quadrant
+      { x: canvas.width * 3/4, y: canvas.height / 4 },         // Top-right quadrant
+      { x: canvas.width / 4, y: canvas.height * 3/4 },         // Bottom-left quadrant
+      { x: canvas.width * 3/4, y: canvas.height * 3/4 },       // Bottom-right quadrant
+      { x: canvas.width / 4, y: canvas.height / 2 },           // Left side
+      { x: canvas.width * 3/4, y: canvas.height / 2 },         // Right side
+      { x: canvas.width / 2, y: canvas.height / 4 },           // Top side
+      { x: canvas.width / 2, y: canvas.height * 3/4 },         // Bottom side
+    ];
+    target = midpointTargets[Math.floor(Math.random() * midpointTargets.length)];
+  }
 
   blackHoles.push(new BlackHole(spawnPoint.x, spawnPoint.y, target.x, target.y));
   AudioSystem.play('blackhole');
@@ -1870,15 +1907,49 @@ function drawHUD() {
   ctx.fillText(`SURVIVORS: ${uninfectedTriangles.length}/${CONFIG.uninfectedAmount}`, canvas.width - 20, 105);
 
   // Energy display
-  ctx.textAlign = 'left';
-  ctx.font = "bold 12px 'Press Start 2P'";
   const energyColors = { 'flame': '#FF6600', 'ball': '#00FFFF', 'lightning': '#8888FF' };
   const energyColor = energyColors[gameState.currentWeapon] || '#00FFFF';
-  ctx.fillStyle = energyColor;
-  ctx.shadowColor = energyColor;
-  ctx.shadowBlur = 10;
-  ctx.fillText(`ENERGY: ${Math.floor(turret.energy)}/${turret.maxEnergy}`, 20, 35);
-  ctx.shadowBlur = 0;
+
+  if (isMobileMode) {
+    // Mobile: draw energy bar in bottom left corner
+    const barWidth = 120;
+    const barHeight = 16;
+    const barX = 20;
+    const barY = canvas.height - 50;
+    const energyPercent = turret.energy / turret.maxEnergy;
+
+    // Bar background
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.fillRect(barX - 2, barY - 2, barWidth + 4, barHeight + 4);
+
+    // Bar border
+    ctx.strokeStyle = energyColor;
+    ctx.lineWidth = 2;
+    ctx.shadowColor = energyColor;
+    ctx.shadowBlur = 5;
+    ctx.strokeRect(barX, barY, barWidth, barHeight);
+
+    // Energy fill
+    ctx.fillStyle = energyColor;
+    ctx.shadowBlur = 10;
+    ctx.fillRect(barX + 2, barY + 2, (barWidth - 4) * energyPercent, barHeight - 4);
+    ctx.shadowBlur = 0;
+
+    // Energy text on bar
+    ctx.font = "bold 8px 'Press Start 2P'";
+    ctx.fillStyle = '#FFFFFF';
+    ctx.textAlign = 'center';
+    ctx.fillText(`${Math.floor(turret.energy)}`, barX + barWidth / 2, barY + barHeight - 4);
+  } else {
+    // Desktop: text display
+    ctx.textAlign = 'left';
+    ctx.font = "bold 12px 'Press Start 2P'";
+    ctx.fillStyle = energyColor;
+    ctx.shadowColor = energyColor;
+    ctx.shadowBlur = 10;
+    ctx.fillText(`ENERGY: ${Math.floor(turret.energy)}/${turret.maxEnergy}`, 20, 35);
+    ctx.shadowBlur = 0;
+  }
 
   // Black hole indicator
   if (gameState.blackHolesAvailable > 0) {
