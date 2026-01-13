@@ -1,8 +1,8 @@
-// HEXGRID - Main Game Script
+// HEXGRID - Main Game Script (Square Grid Version with WASD Controls)
 
 import { HexRenderer } from './renderer.js';
 import { AudioSystem } from './audio.js';
-import { getDirectionFromDelta, HEX_DIRECTIONS } from './hexmath.js';
+import { HEX_DIRECTIONS } from './hexmath.js';
 
 // Mobile detection
 const isMobileMode = new URLSearchParams(window.location.search).get('mobile') === 'true';
@@ -164,6 +164,7 @@ function showGame() {
 
     if (isMobileMode) {
         mobileHint.style.display = 'block';
+        mobileHint.textContent = 'Swipe to move';
         setTimeout(() => {
             mobileHint.style.display = 'none';
         }, 3000);
@@ -255,8 +256,8 @@ function updateLobbyUI(data) {
     // Update status text
     if (data.realPlayerCount === 0) {
         lobbyStatusEl.textContent = 'Waiting for players...';
-    } else if (data.realPlayerCount < 8) {
-        lobbyStatusEl.textContent = `${data.realPlayerCount}/8 players - Starting soon...`;
+    } else if (data.realPlayerCount < 4) {
+        lobbyStatusEl.textContent = `${data.realPlayerCount}/4 players - Starting soon...`;
     } else {
         lobbyStatusEl.textContent = 'Lobby full!';
     }
@@ -379,7 +380,7 @@ function handleGameOver(data) {
     // Build results table
     resultsTableEl.innerHTML = '';
 
-    for (const ranking of data.rankings.slice(0, 8)) {
+    for (const ranking of data.rankings.slice(0, 4)) {
         const row = document.createElement('div');
         row.className = `result-row ${ranking.rank === 1 ? 'winner' : ''}`;
 
@@ -436,83 +437,75 @@ function handleError(data) {
     showError(data.message);
 }
 
-// Input handling - cursor-based with path preview
-let previewDirection = null;
+// Input handling - WASD keyboard controls
+const KEY_TO_DIRECTION = {
+    'w': 'N',
+    'W': 'N',
+    'ArrowUp': 'N',
+    's': 'S',
+    'S': 'S',
+    'ArrowDown': 'S',
+    'a': 'W',
+    'A': 'W',
+    'ArrowLeft': 'W',
+    'd': 'E',
+    'D': 'E',
+    'ArrowRight': 'E'
+};
 
-function getDirectionToPoint(playerPos, targetX, targetY) {
-    if (!playerPos) return null;
+function sendDirection(direction) {
+    if (!socket || gameState.status !== 'playing' || isSpectator) return;
+    if (!HEX_DIRECTIONS[direction]) return;
 
-    // Get player's pixel position
-    const playerPixel = renderer.getPlayerPixelPosition(playerPos);
-    if (!playerPixel) return null;
-
-    const dx = targetX - playerPixel.x;
-    const dy = targetY - playerPixel.y;
-
-    // Need minimum distance to determine direction
-    if (Math.sqrt(dx * dx + dy * dy) < 20) return null;
-
-    return getDirectionFromDelta(dx, dy);
-}
-
-function getLocalPlayerPosition() {
-    if (!localPlayerId || !gameState.players) return null;
-    const localPlayer = gameState.players.find(p => p.id === localPlayerId);
-    return localPlayer ? localPlayer.position : null;
+    AudioSystem.init();
+    socket.emit('hexgrid:move', { direction });
+    AudioSystem.playMove();
 }
 
 function setupInput() {
-    // Mouse move - update preview direction
-    canvas.addEventListener('mousemove', (e) => {
-        if (!socket || gameState.status !== 'playing' || isSpectator) return;
-
-        const rect = canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-
-        const playerPos = getLocalPlayerPosition();
-        previewDirection = getDirectionToPoint(playerPos, x, y);
-        renderer.setPreviewDirection(previewDirection);
-    });
-
-    // Mouse click - confirm direction
-    canvas.addEventListener('click', (e) => {
-        if (!socket || gameState.status !== 'playing' || isSpectator) return;
-
-        AudioSystem.init();
-
-        const rect = canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-
-        const playerPos = getLocalPlayerPosition();
-        const direction = getDirectionToPoint(playerPos, x, y);
-
-        if (direction && HEX_DIRECTIONS[direction]) {
-            socket.emit('hexgrid:move', { direction });
-            AudioSystem.playMove();
+    // Keyboard controls - WASD and arrow keys
+    document.addEventListener('keydown', (e) => {
+        const direction = KEY_TO_DIRECTION[e.key];
+        if (direction) {
+            e.preventDefault();
+            sendDirection(direction);
         }
     });
 
-    // Touch input for mobile - tap to set direction
+    // Touch input for mobile - swipe to set direction
+    let touchStartX = 0;
+    let touchStartY = 0;
+
     canvas.addEventListener('touchstart', (e) => {
         e.preventDefault();
         AudioSystem.init();
 
+        const touch = e.touches[0];
+        touchStartX = touch.clientX;
+        touchStartY = touch.clientY;
+    }, { passive: false });
+
+    canvas.addEventListener('touchend', (e) => {
+        e.preventDefault();
         if (!socket || gameState.status !== 'playing' || isSpectator) return;
 
-        const touch = e.touches[0];
-        const rect = canvas.getBoundingClientRect();
-        const x = touch.clientX - rect.left;
-        const y = touch.clientY - rect.top;
+        const touch = e.changedTouches[0];
+        const dx = touch.clientX - touchStartX;
+        const dy = touch.clientY - touchStartY;
 
-        const playerPos = getLocalPlayerPosition();
-        const direction = getDirectionToPoint(playerPos, x, y);
+        // Need minimum swipe distance
+        const minSwipe = 30;
+        if (Math.abs(dx) < minSwipe && Math.abs(dy) < minSwipe) return;
 
-        if (direction && HEX_DIRECTIONS[direction]) {
-            socket.emit('hexgrid:move', { direction });
-            AudioSystem.playMove();
+        // Determine direction from swipe
+        let direction;
+        if (Math.abs(dx) > Math.abs(dy)) {
+            direction = dx > 0 ? 'E' : 'W';
+        } else {
+            direction = dy > 0 ? 'S' : 'N';
         }
+
+        sendDirection(direction);
     }, { passive: false });
 
     // Prevent scrolling on touch

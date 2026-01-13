@@ -1,57 +1,56 @@
 // HEXGRID Game State Types and Constants
+// Now uses square grid with (x, y) coordinates
 
-// Hex coordinate system (axial coordinates)
-export interface HexCoord {
-  q: number // column
-  r: number // row
+// Grid coordinate
+export interface GridCoord {
+  x: number
+  y: number
 }
 
-// Six directions on a hex grid
-export type HexDirection = 'NE' | 'E' | 'SE' | 'SW' | 'W' | 'NW'
+// Four directions on a square grid
+export type GridDirection = 'N' | 'E' | 'S' | 'W'
 
-export const HEX_DIRECTIONS: Record<HexDirection, HexCoord> = {
-  NE: { q: 1, r: -1 },
-  E: { q: 1, r: 0 },
-  SE: { q: 0, r: 1 },
-  SW: { q: -1, r: 1 },
-  W: { q: -1, r: 0 },
-  NW: { q: 0, r: -1 },
+export const GRID_DIRECTIONS: Record<GridDirection, GridCoord> = {
+  N: { x: 0, y: -1 },
+  E: { x: 1, y: 0 },
+  S: { x: 0, y: 1 },
+  W: { x: -1, y: 0 },
 }
 
 // Player state
-export interface HexPlayer {
-  id: string // socket.id or AI id
-  odanId: number | null // actual user id for real players
-  username: string
-  avatarColor: string
-  avatarImage: string | null
-  isAI: boolean
-  position: HexCoord
-  trail: HexCoord[] // Current path being traced (not yet claimed)
-  territory: Set<string> // Claimed hexes (serialized as "q,r")
-  isAlive: boolean
-  direction: HexDirection | null
-  score: number
-  eliminationCount: number
-  speedBoostUntil: number // timestamp when speed boost ends
-  multiplierUntil: number // timestamp when 2x multiplier ends
-  frozenUntil: number // timestamp when freeze ends
-  startPosition: HexCoord // where player started (for respawn reference)
-}
-
-// Serializable player state for sending to clients
-export interface HexPlayerState {
+export interface GridPlayer {
   id: string
   odanId: number | null
   username: string
   avatarColor: string
   avatarImage: string | null
   isAI: boolean
-  position: HexCoord
-  trail: HexCoord[]
-  territory: string[] // Array instead of Set for JSON
+  position: GridCoord
+  trail: GridCoord[]
+  territory: Set<string>
   isAlive: boolean
-  direction: HexDirection | null
+  direction: GridDirection | null
+  score: number
+  eliminationCount: number
+  speedBoostUntil: number
+  multiplierUntil: number
+  frozenUntil: number
+  startPosition: GridCoord
+}
+
+// Serializable player state for sending to clients
+export interface GridPlayerState {
+  id: string
+  odanId: number | null
+  username: string
+  avatarColor: string
+  avatarImage: string | null
+  isAI: boolean
+  position: GridCoord
+  trail: GridCoord[]
+  territory: string[]
+  isAlive: boolean
+  direction: GridDirection | null
   score: number
   eliminationCount: number
   hasSpeedBoost: boolean
@@ -65,8 +64,8 @@ export type PowerUpType = 'gem' | 'crown' | 'multiplier' | 'speed' | 'freeze'
 export interface PowerUp {
   id: string
   type: PowerUpType
-  position: HexCoord
-  value?: number // for gems, the point value
+  position: GridCoord
+  value?: number
   spawnedAt: number
 }
 
@@ -74,30 +73,30 @@ export interface PowerUp {
 export type GameStatus = 'waiting' | 'countdown' | 'playing' | 'ending'
 
 // Game state
-export interface HexGameState {
+export interface GridGameState {
   status: GameStatus
-  players: Map<string, HexPlayer>
+  players: Map<string, GridPlayer>
   powerUps: PowerUp[]
   gridSize: number
   roundStartTime: number | null
   roundEndTime: number | null
-  roundDuration: number // milliseconds
+  roundDuration: number
   countdownStartTime: number | null
   tickInterval: NodeJS.Timeout | null
   lastPowerUpSpawn: number
 }
 
 // Lobby state
-export interface HexLobby {
+export interface GridLobby {
   id: string
-  gameState: HexGameState
+  gameState: GridGameState
   realPlayerCount: number
-  spectators: Set<string> // socket ids of players waiting for next round
+  spectators: Set<string>
 }
 
 // Data sent to clients
 export interface LobbyUpdateData {
-  players: HexPlayerState[]
+  players: GridPlayerState[]
   status: GameStatus
   countdown?: number
   realPlayerCount: number
@@ -105,7 +104,7 @@ export interface LobbyUpdateData {
 }
 
 export interface GameStateUpdateData {
-  players: HexPlayerState[]
+  players: GridPlayerState[]
   powerUps: PowerUp[]
   timeRemaining: number
   status: GameStatus
@@ -113,7 +112,7 @@ export interface GameStateUpdateData {
 
 export interface PlayerEliminatedData {
   playerId: string
-  eliminatedBy: string | null // null if hit boundary
+  eliminatedBy: string | null
   playerUsername: string
   eliminatorUsername: string | null
 }
@@ -141,13 +140,13 @@ export interface GameOverData {
 }
 
 // Constants
-export const HEX_GRID_SIZE = 7 // Grid radius (creates ~127 hexes)
+export const GRID_SIZE = 21 // 21x21 grid
 export const MAX_PLAYERS = 4
-export const ROUND_DURATION = 75000 // 75 seconds
-export const COUNTDOWN_DURATION = 3000 // 3 seconds
-export const TICK_RATE = 30 // 30 updates per second (~33ms) for smoother rendering
-export const MOVE_INTERVAL = 450 // Players move every 450ms (~2.2 moves/sec)
-export const SPEED_BOOST_MOVE_INTERVAL = 300 // ~3.3 moves/sec with speed boost
+export const ROUND_DURATION = 75000
+export const COUNTDOWN_DURATION = 3000
+export const TICK_RATE = 30
+export const MOVE_INTERVAL = 400 // Players move every 400ms
+export const SPEED_BOOST_MOVE_INTERVAL = 267
 
 // Scoring
 export const POINTS_PER_TILE = 5
@@ -156,29 +155,29 @@ export const ELIMINATION_BOUNTY = 100
 export const WINNER_BONUS = 250
 
 // Power-up config
-export const POWERUP_SPAWN_INTERVAL_MIN = 5000 // 5 seconds
-export const POWERUP_SPAWN_INTERVAL_MAX = 10000 // 10 seconds
+export const POWERUP_SPAWN_INTERVAL_MIN = 5000
+export const POWERUP_SPAWN_INTERVAL_MAX = 10000
 export const MAX_POWERUPS_ON_GRID = 3
-export const SPEED_BOOST_DURATION = 5000 // 5 seconds
-export const MULTIPLIER_DURATION = 8000 // 8 seconds
-export const FREEZE_DURATION = 3000 // 3 seconds
+export const SPEED_BOOST_DURATION = 5000
+export const MULTIPLIER_DURATION = 8000
+export const FREEZE_DURATION = 3000
 export const GEM_MIN_VALUE = 50
 export const GEM_MAX_VALUE = 200
 export const CROWN_VALUE = 500
-export const CROWN_SPAWN_CHANCE = 0.1 // 10% chance when spawning powerup
+export const CROWN_SPAWN_CHANCE = 0.1
 
-// Starting positions (4 positions slightly inward from edges so players can move any direction)
-export function getStartingPositions(gridSize: number): HexCoord[] {
-  const offset = 2; // Start 2 hexes inward from edge
+// Starting positions (4 corners, offset slightly inward)
+export function getStartingPositions(gridSize: number): GridCoord[] {
+  const offset = 2
   return [
-    { q: -(gridSize - offset), r: 0 }, // West
-    { q: gridSize - offset, r: 0 }, // East
-    { q: 0, r: -(gridSize - offset) }, // North
-    { q: 0, r: gridSize - offset }, // South
+    { x: offset, y: offset }, // Top-left
+    { x: gridSize - 1 - offset, y: offset }, // Top-right
+    { x: offset, y: gridSize - 1 - offset }, // Bottom-left
+    { x: gridSize - 1 - offset, y: gridSize - 1 - offset }, // Bottom-right
   ]
 }
 
-// AI player colors (distinct from typical user colors)
+// AI player colors
 export const AI_COLORS = [
   '#FF6B6B', // Red
   '#4ECDC4', // Teal
@@ -194,35 +193,34 @@ export const AI_NAMES = [
 ]
 
 // Utility functions
-export function hexToKey(hex: HexCoord): string {
-  return `${hex.q},${hex.r}`
+export function coordToKey(coord: GridCoord): string {
+  return `${coord.x},${coord.y}`
 }
 
-export function keyToHex(key: string): HexCoord {
-  const [q, r] = key.split(',').map(Number)
-  return { q, r }
+export function keyToCoord(key: string): GridCoord {
+  const [x, y] = key.split(',').map(Number)
+  return { x, y }
 }
 
-export function getNeighbor(hex: HexCoord, direction: HexDirection): HexCoord {
-  const d = HEX_DIRECTIONS[direction]
-  return { q: hex.q + d.q, r: hex.r + d.r }
+export function getNeighbor(coord: GridCoord, direction: GridDirection): GridCoord {
+  const d = GRID_DIRECTIONS[direction]
+  return { x: coord.x + d.x, y: coord.y + d.y }
 }
 
-export function isInBounds(hex: HexCoord, gridSize: number): boolean {
-  const s = -hex.q - hex.r
-  return Math.abs(hex.q) <= gridSize && Math.abs(hex.r) <= gridSize && Math.abs(s) <= gridSize
+export function isInBounds(coord: GridCoord, gridSize: number): boolean {
+  return coord.x >= 0 && coord.x < gridSize && coord.y >= 0 && coord.y < gridSize
 }
 
-export function hexDistance(a: HexCoord, b: HexCoord): number {
-  return (Math.abs(a.q - b.q) + Math.abs(a.q + a.r - b.q - b.r) + Math.abs(a.r - b.r)) / 2
+export function gridDistance(a: GridCoord, b: GridCoord): number {
+  return Math.abs(a.x - b.x) + Math.abs(a.y - b.y)
 }
 
-export function hexEquals(a: HexCoord, b: HexCoord): boolean {
-  return a.q === b.q && a.r === b.r
+export function coordEquals(a: GridCoord, b: GridCoord): boolean {
+  return a.x === b.x && a.y === b.y
 }
 
 // Convert player to serializable state
-export function playerToState(player: HexPlayer): HexPlayerState {
+export function playerToState(player: GridPlayer): GridPlayerState {
   const now = Date.now()
   return {
     id: player.id,
@@ -245,12 +243,12 @@ export function playerToState(player: HexPlayer): HexPlayerState {
 }
 
 // Create initial game state
-export function createInitialGameState(): HexGameState {
+export function createInitialGameState(): GridGameState {
   return {
     status: 'waiting',
     players: new Map(),
     powerUps: [],
-    gridSize: HEX_GRID_SIZE,
+    gridSize: GRID_SIZE,
     roundStartTime: null,
     roundEndTime: null,
     roundDuration: ROUND_DURATION,
@@ -259,3 +257,17 @@ export function createInitialGameState(): HexGameState {
     lastPowerUpSpawn: 0,
   }
 }
+
+// Legacy exports for compatibility (hex names pointing to grid equivalents)
+export type HexCoord = GridCoord
+export type HexDirection = GridDirection
+export type HexPlayer = GridPlayer
+export type HexPlayerState = GridPlayerState
+export type HexGameState = GridGameState
+export type HexLobby = GridLobby
+export const HEX_DIRECTIONS = GRID_DIRECTIONS
+export const HEX_GRID_SIZE = GRID_SIZE
+export const hexToKey = coordToKey
+export const keyToHex = keyToCoord
+export const hexDistance = gridDistance
+export const hexEquals = coordEquals

@@ -1,4 +1,4 @@
-// HEXGRID - Canvas Renderer
+// HEXGRID - Canvas Renderer (Square Grid Version)
 
 import { hexToPixel, getHexCorners, hexToKey } from './hexmath.js';
 
@@ -6,26 +6,21 @@ export class HexRenderer {
     constructor(canvas) {
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d');
-        this.gridSize = 7;
-        this.hexSize = 30;
-        this.centerX = 0;
-        this.centerY = 0;
+        this.gridSize = 21;
+        this.cellSize = 30;
+        this.offsetX = 0;
+        this.offsetY = 0;
 
         // Animation state
         this.screenShake = { x: 0, y: 0, intensity: 0 };
         this.particles = [];
 
         // Interpolation state for smooth movement
-        this.playerPositions = new Map(); // playerId -> { prev: {q,r}, current: {q,r}, lastUpdate: timestamp }
+        this.playerPositions = new Map(); // playerId -> { prev: {x,y}, current: {x,y}, lastUpdate: timestamp }
         this.interpolationDuration = 400; // ms to interpolate between positions
 
-        // Path preview state
-        this.previewDirection = null;
-        this.localPlayerId = null;
-        this.gridSizeForBounds = 7;
-
-        // Pre-calculate grid hexes
-        this.gridHexes = [];
+        // Grid cells cache
+        this.gridCells = [];
 
         this.resize();
     }
@@ -33,48 +28,34 @@ export class HexRenderer {
     resize() {
         this.canvas.width = window.innerWidth;
         this.canvas.height = window.innerHeight;
-        this.centerX = this.canvas.width / 2;
-        this.centerY = this.canvas.height / 2;
 
-        // Calculate hex size to fit grid
-        const maxRadius = Math.min(this.canvas.width, this.canvas.height) * 0.42;
-        this.hexSize = maxRadius / (this.gridSize * 1.75);
+        // Calculate cell size to fit grid with some margin
+        const maxGridPixels = Math.min(this.canvas.width, this.canvas.height) * 0.85;
+        this.cellSize = Math.floor(maxGridPixels / this.gridSize);
 
-        // Pre-calculate grid hexes
-        this.gridHexes = [];
-        for (let q = -this.gridSize; q <= this.gridSize; q++) {
-            for (let r = -this.gridSize; r <= this.gridSize; r++) {
-                const s = -q - r;
-                if (Math.abs(s) <= this.gridSize) {
-                    this.gridHexes.push({ q, r });
-                }
+        // Center the grid
+        const gridPixelSize = this.cellSize * this.gridSize;
+        this.offsetX = (this.canvas.width - gridPixelSize) / 2;
+        this.offsetY = (this.canvas.height - gridPixelSize) / 2;
+
+        // Pre-calculate grid cells
+        this.gridCells = [];
+        for (let x = 0; x < this.gridSize; x++) {
+            for (let y = 0; y < this.gridSize; y++) {
+                this.gridCells.push({ x, y });
             }
         }
     }
 
     setGridSize(size) {
         this.gridSize = size;
-        this.gridSizeForBounds = size;
         this.resize();
     }
 
-    // Set the preview direction for path drawing
-    setPreviewDirection(direction) {
-        this.previewDirection = direction;
-    }
-
-    // Get pixel position for a hex coordinate
-    getPlayerPixelPosition(hexPos) {
-        if (!hexPos) return null;
-        return hexToPixel(hexPos.q, hexPos.r, this.hexSize, this.centerX, this.centerY);
-    }
-
-    // Check if hex is in bounds
-    isHexInBounds(hex) {
-        const s = -hex.q - hex.r;
-        return Math.abs(hex.q) <= this.gridSizeForBounds &&
-               Math.abs(hex.r) <= this.gridSizeForBounds &&
-               Math.abs(s) <= this.gridSizeForBounds;
+    // Get pixel position for a grid coordinate (center of cell)
+    getPixelPosition(coord) {
+        if (!coord) return null;
+        return hexToPixel(coord.x, coord.y, this.cellSize, this.offsetX, this.offsetY);
     }
 
     // Update player position for interpolation
@@ -84,7 +65,7 @@ export class HexRenderer {
 
         if (existing) {
             // Only update if position actually changed
-            if (existing.current.q !== newPosition.q || existing.current.r !== newPosition.r) {
+            if (existing.current.x !== newPosition.x || existing.current.y !== newPosition.y) {
                 existing.prev = { ...existing.current };
                 existing.current = { ...newPosition };
                 existing.lastUpdate = now;
@@ -99,10 +80,10 @@ export class HexRenderer {
         }
     }
 
-    // Get interpolated position for a player
+    // Get interpolated pixel position for a player
     getInterpolatedPosition(playerId, fallbackPosition) {
         const posData = this.playerPositions.get(playerId);
-        if (!posData) return fallbackPosition;
+        if (!posData) return this.getPixelPosition(fallbackPosition);
 
         const now = Date.now();
         const elapsed = now - posData.lastUpdate;
@@ -111,9 +92,9 @@ export class HexRenderer {
         // Smooth easing function
         const easeT = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
 
-        // Convert hex positions to pixel positions and interpolate
-        const prevPixel = hexToPixel(posData.prev.q, posData.prev.r, this.hexSize, this.centerX, this.centerY);
-        const currPixel = hexToPixel(posData.current.q, posData.current.r, this.hexSize, this.centerX, this.centerY);
+        // Convert grid positions to pixel positions and interpolate
+        const prevPixel = this.getPixelPosition(posData.prev);
+        const currPixel = this.getPixelPosition(posData.current);
 
         return {
             x: prevPixel.x + (currPixel.x - prevPixel.x) * easeT,
@@ -151,8 +132,10 @@ export class HexRenderer {
     }
 
     // Add particles for effects
-    addParticles(hex, color, count = 10) {
-        const pos = hexToPixel(hex.q, hex.r, this.hexSize, this.centerX, this.centerY);
+    addParticles(coord, color, count = 10) {
+        const pos = this.getPixelPosition(coord);
+        if (!pos) return;
+
         for (let i = 0; i < count; i++) {
             const angle = Math.random() * Math.PI * 2;
             const speed = 2 + Math.random() * 3;
@@ -196,14 +179,14 @@ export class HexRenderer {
         }
     }
 
-    // Draw a single hexagon
-    drawHex(q, r, fillColor = null, strokeColor = null, lineWidth = 1) {
-        const pos = hexToPixel(q, r, this.hexSize, this.centerX, this.centerY);
-        const corners = getHexCorners(pos.x, pos.y, this.hexSize * 0.95);
+    // Draw a single cell (square)
+    drawCell(x, y, fillColor = null, strokeColor = null, lineWidth = 1) {
+        const pos = this.getPixelPosition({ x, y });
+        const corners = getHexCorners(pos.x, pos.y, this.cellSize * 0.95);
 
         this.ctx.beginPath();
         this.ctx.moveTo(corners[0].x, corners[0].y);
-        for (let i = 1; i < 6; i++) {
+        for (let i = 1; i < 4; i++) {
             this.ctx.lineTo(corners[i].x, corners[i].y);
         }
         this.ctx.closePath();
@@ -220,10 +203,10 @@ export class HexRenderer {
         }
     }
 
-    // Draw the hex grid background
+    // Draw the grid background
     drawGrid() {
-        for (const hex of this.gridHexes) {
-            this.drawHex(hex.q, hex.r, null, 'rgba(0, 255, 255, 0.1)', 1);
+        for (const cell of this.gridCells) {
+            this.drawCell(cell.x, cell.y, null, 'rgba(0, 255, 255, 0.1)', 1);
         }
     }
 
@@ -231,8 +214,8 @@ export class HexRenderer {
     drawTerritory(territoryKeys, color) {
         const fillColor = color + '40'; // 25% opacity
         for (const key of territoryKeys) {
-            const [q, r] = key.split(',').map(Number);
-            this.drawHex(q, r, fillColor, color + '80', 1);
+            const [x, y] = key.split(',').map(Number);
+            this.drawCell(x, y, fillColor, color + '80', 1);
         }
     }
 
@@ -240,10 +223,10 @@ export class HexRenderer {
     drawTrail(trail, color) {
         if (trail.length < 1) return;
 
-        // Draw trail hexes
+        // Draw trail cells
         const trailColor = color + '60';
-        for (const hex of trail) {
-            this.drawHex(hex.q, hex.r, trailColor, color, 2);
+        for (const cell of trail) {
+            this.drawCell(cell.x, cell.y, trailColor, color, 2);
         }
 
         // Draw connecting line
@@ -253,11 +236,11 @@ export class HexRenderer {
             this.ctx.lineWidth = 3;
             this.ctx.setLineDash([8, 4]);
 
-            const first = hexToPixel(trail[0].q, trail[0].r, this.hexSize, this.centerX, this.centerY);
+            const first = this.getPixelPosition(trail[0]);
             this.ctx.moveTo(first.x, first.y);
 
             for (let i = 1; i < trail.length; i++) {
-                const pos = hexToPixel(trail[i].q, trail[i].r, this.hexSize, this.centerX, this.centerY);
+                const pos = this.getPixelPosition(trail[i]);
                 this.ctx.lineTo(pos.x, pos.y);
             }
 
@@ -270,7 +253,7 @@ export class HexRenderer {
     drawPlayer(player, isLocalPlayer = false) {
         // Use interpolated position for smooth movement
         const pos = this.getInterpolatedPosition(player.id, player.position);
-        const radius = this.hexSize * 0.4;
+        const radius = this.cellSize * 0.35;
 
         // Glow effect for local player
         if (isLocalPlayer) {
@@ -283,14 +266,8 @@ export class HexRenderer {
         this.ctx.beginPath();
         this.ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
 
-        if (player.avatarImage) {
-            // Draw image (would need to pre-load)
-            this.ctx.fillStyle = player.avatarColor;
-            this.ctx.fill();
-        } else {
-            this.ctx.fillStyle = player.avatarColor;
-            this.ctx.fill();
-        }
+        this.ctx.fillStyle = player.avatarColor;
+        this.ctx.fill();
 
         // Border
         this.ctx.strokeStyle = '#ffffff';
@@ -352,81 +329,13 @@ export class HexRenderer {
         this.ctx.restore();
     }
 
-    // Draw path preview showing where player will go
-    drawPathPreview(playerPos, direction, color) {
-        if (!direction || !playerPos) return;
-
-        const dirVectors = {
-            NE: { q: 1, r: -1 },
-            E:  { q: 1, r: 0 },
-            SE: { q: 0, r: 1 },
-            SW: { q: -1, r: 1 },
-            W:  { q: -1, r: 0 },
-            NW: { q: 0, r: -1 }
-        };
-
-        const dir = dirVectors[direction];
-        if (!dir) return;
-
-        // Draw preview hexes along the path (up to 5 hexes or until boundary)
-        const previewHexes = [];
-        let currentHex = { q: playerPos.q, r: playerPos.r };
-
-        for (let i = 0; i < 5; i++) {
-            const nextHex = {
-                q: currentHex.q + dir.q,
-                r: currentHex.r + dir.r
-            };
-
-            if (!this.isHexInBounds(nextHex)) break;
-
-            previewHexes.push(nextHex);
-            currentHex = nextHex;
-        }
-
-        // Draw preview path with fading opacity
-        this.ctx.save();
-        for (let i = 0; i < previewHexes.length; i++) {
-            const hex = previewHexes[i];
-            const opacity = 0.4 - (i * 0.07);
-            const pos = hexToPixel(hex.q, hex.r, this.hexSize, this.centerX, this.centerY);
-            const corners = getHexCorners(pos.x, pos.y, this.hexSize * 0.95);
-
-            this.ctx.beginPath();
-            this.ctx.moveTo(corners[0].x, corners[0].y);
-            for (let j = 1; j < 6; j++) {
-                this.ctx.lineTo(corners[j].x, corners[j].y);
-            }
-            this.ctx.closePath();
-
-            this.ctx.fillStyle = color + Math.floor(opacity * 255).toString(16).padStart(2, '0');
-            this.ctx.fill();
-
-            this.ctx.strokeStyle = color;
-            this.ctx.lineWidth = 2;
-            this.ctx.setLineDash([4, 4]);
-            this.ctx.stroke();
-            this.ctx.setLineDash([]);
-        }
-        this.ctx.restore();
-
-        // Draw arrow at the end of preview path
-        if (previewHexes.length > 0) {
-            const lastHex = previewHexes[previewHexes.length - 1];
-            const lastPos = hexToPixel(lastHex.q, lastHex.r, this.hexSize, this.centerX, this.centerY);
-            this.drawDirectionArrow(lastPos.x, lastPos.y, this.hexSize * 0.3, direction, color);
-        }
-    }
-
-    // Draw direction arrow
+    // Draw direction arrow (for N, E, S, W directions)
     drawDirectionArrow(x, y, radius, direction, color) {
         const dirVectors = {
-            NE: { x: 0.5, y: -0.866 },
-            E:  { x: 1, y: 0 },
-            SE: { x: 0.5, y: 0.866 },
-            SW: { x: -0.5, y: 0.866 },
-            W:  { x: -1, y: 0 },
-            NW: { x: -0.5, y: -0.866 }
+            N: { x: 0, y: -1 },
+            E: { x: 1, y: 0 },
+            S: { x: 0, y: 1 },
+            W: { x: -1, y: 0 }
         };
 
         const dir = dirVectors[direction];
@@ -458,8 +367,10 @@ export class HexRenderer {
 
     // Draw power-up
     drawPowerUp(powerUp) {
-        const pos = hexToPixel(powerUp.position.q, powerUp.position.r, this.hexSize, this.centerX, this.centerY);
-        const size = this.hexSize * 0.35;
+        const pos = this.getPixelPosition(powerUp.position);
+        if (!pos) return;
+
+        const size = this.cellSize * 0.35;
         const time = Date.now() / 1000;
         const bob = Math.sin(time * 3) * 3;
 
@@ -591,9 +502,11 @@ export class HexRenderer {
         this.ctx.fillRect(-10, -10, this.canvas.width + 20, this.canvas.height + 20);
 
         // Draw background gradient
+        const centerX = this.canvas.width / 2;
+        const centerY = this.canvas.height / 2;
         const gradient = this.ctx.createRadialGradient(
-            this.centerX, this.centerY, 0,
-            this.centerX, this.centerY, this.canvas.width * 0.6
+            centerX, centerY, 0,
+            centerX, centerY, this.canvas.width * 0.6
         );
         gradient.addColorStop(0, 'rgba(0, 50, 80, 0.3)');
         gradient.addColorStop(1, 'rgba(10, 10, 26, 0)');
@@ -631,15 +544,7 @@ export class HexRenderer {
         const localPlayer = gameState.players.find(p => p.id === localPlayerId);
         if (localPlayer && localPlayer.isAlive) {
             this.drawPlayer(localPlayer, true);
-
-            // Draw path preview for local player
-            if (this.previewDirection) {
-                this.drawPathPreview(localPlayer.position, this.previewDirection, localPlayer.avatarColor);
-            }
         }
-
-        // Store local player id for input handling
-        this.localPlayerId = localPlayerId;
 
         // Draw particles on top
         this.drawParticles();

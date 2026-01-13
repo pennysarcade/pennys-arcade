@@ -1,4 +1,4 @@
-// HEXGRID AI Opponent Logic
+// HEXGRID AI Opponent Logic (Square Grid Version)
 
 import {
   HexCoord,
@@ -16,11 +16,11 @@ import {
 
 // AI behavior profile
 export interface AIBehavior {
-  updateInterval: number // How often AI changes direction (ms)
-  aggressiveness: number // 0-1, likelihood to chase players
-  territoryFocus: number // 0-1, likelihood to expand territory
-  powerUpFocus: number // 0-1, likelihood to go for powerups
-  returnThreshold: number // Trail length before returning to territory
+  updateInterval: number
+  aggressiveness: number
+  territoryFocus: number
+  powerUpFocus: number
+  returnThreshold: number
 }
 
 // AI difficulty profiles
@@ -48,10 +48,9 @@ export const AI_PROFILES: Record<string, AIBehavior> = {
   },
 }
 
-// Get a random AI profile
 export function getRandomProfile(): AIBehavior {
   const profiles = ['easy', 'medium', 'hard']
-  const weights = [0.4, 0.4, 0.2] // 40% easy, 40% medium, 20% hard
+  const weights = [0.4, 0.4, 0.2]
   const rand = Math.random()
   let cumulative = 0
   for (let i = 0; i < profiles.length; i++) {
@@ -63,7 +62,6 @@ export function getRandomProfile(): AIBehavior {
   return AI_PROFILES.medium
 }
 
-// Store AI state (decision timing, current profile)
 const aiState: Map<
   string,
   {
@@ -101,13 +99,9 @@ function getValidDirections(
   for (const dir of Object.keys(HEX_DIRECTIONS) as HexDirection[]) {
     const next = getNeighbor(position, dir)
 
-    // Must be in bounds
     if (!isInBounds(next, gridSize)) continue
-
-    // Can't hit own trail
     if (trailKeys.has(hexToKey(next))) continue
 
-    // Check for other players' trails (would cause elimination)
     let hitsOtherTrail = false
     for (const [pid, player] of allPlayers) {
       if (pid === playerId || !player.isAlive) continue
@@ -124,28 +118,24 @@ function getValidDirections(
   return validDirs
 }
 
-// Find direction toward a target hex
+// Find direction toward a target (square grid)
 function getDirectionToward(from: HexCoord, to: HexCoord): HexDirection | null {
-  const dq = to.q - from.q
-  const dr = to.r - from.r
+  const dx = to.x - from.x
+  const dy = to.y - from.y
 
-  // Find the direction that gets us closest
-  let bestDir: HexDirection | null = null
-  let bestDist = Infinity
-
-  for (const dir of Object.keys(HEX_DIRECTIONS) as HexDirection[]) {
-    const next = getNeighbor(from, dir)
-    const dist = hexDistance(next, to)
-    if (dist < bestDist) {
-      bestDist = dist
-      bestDir = dir
-    }
+  // Pick the axis with the larger difference
+  if (Math.abs(dx) > Math.abs(dy)) {
+    return dx > 0 ? 'E' : 'W'
+  } else if (dy !== 0) {
+    return dy > 0 ? 'S' : 'N'
+  } else if (dx !== 0) {
+    return dx > 0 ? 'E' : 'W'
   }
 
-  return bestDir
+  return null
 }
 
-// Find nearest hex in player's territory
+// Find nearest cell in player's territory
 function findNearestTerritory(position: HexCoord, territory: Set<string>): HexCoord | null {
   if (territory.size === 0) return null
 
@@ -153,19 +143,18 @@ function findNearestTerritory(position: HexCoord, territory: Set<string>): HexCo
   let nearestDist = Infinity
 
   for (const key of territory) {
-    const [q, r] = key.split(',').map(Number)
-    const hex = { q, r }
-    const dist = hexDistance(position, hex)
+    const [x, y] = key.split(',').map(Number)
+    const cell = { x, y }
+    const dist = hexDistance(position, cell)
     if (dist < nearestDist) {
       nearestDist = dist
-      nearest = hex
+      nearest = cell
     }
   }
 
   return nearest
 }
 
-// Find nearest power-up
 function findNearestPowerUp(position: HexCoord, powerUps: PowerUp[]): PowerUp | null {
   if (powerUps.length === 0) return null
 
@@ -183,7 +172,6 @@ function findNearestPowerUp(position: HexCoord, powerUps: PowerUp[]): PowerUp | 
   return nearest
 }
 
-// Find nearest enemy player
 function findNearestEnemy(
   position: HexCoord,
   playerId: string,
@@ -204,7 +192,6 @@ function findNearestEnemy(
   return nearest
 }
 
-// Check if there's danger nearby (other player's trail close)
 function isDangerNearby(
   position: HexCoord,
   playerId: string,
@@ -214,14 +201,12 @@ function isDangerNearby(
   for (const [pid, player] of players) {
     if (pid === playerId || !player.isAlive) continue
 
-    // Check if enemy player is close
     if (hexDistance(position, player.position) <= dangerRadius) {
       return true
     }
 
-    // Check if enemy trail is close
-    for (const trailHex of player.trail) {
-      if (hexDistance(position, trailHex) <= dangerRadius - 1) {
+    for (const trailCell of player.trail) {
+      if (hexDistance(position, trailCell) <= dangerRadius - 1) {
         return true
       }
     }
@@ -240,9 +225,7 @@ export function getAIMove(ai: HexPlayer, gameState: HexGameState): HexDirection 
   const now = Date.now()
   const profile = state.profile
 
-  // Only make new decisions at the update interval
   if (now - state.lastDecision < profile.updateInterval) {
-    // Continue in current direction if valid
     if (ai.direction) {
       const validDirs = getValidDirections(
         ai.position,
@@ -259,7 +242,6 @@ export function getAIMove(ai: HexPlayer, gameState: HexGameState): HexDirection 
 
   state.lastDecision = now
 
-  // Get valid directions
   const validDirs = getValidDirections(
     ai.position,
     gameState.gridSize,
@@ -269,17 +251,13 @@ export function getAIMove(ai: HexPlayer, gameState: HexGameState): HexDirection 
   )
 
   if (validDirs.length === 0) {
-    // No valid moves - this shouldn't happen often
     return ai.direction
   }
 
-  // Decide on a goal based on current situation and profile
-
-  // Check if we're in territory
   const inTerritory = ai.territory.has(hexToKey(ai.position))
   const trailLength = ai.trail.length
 
-  // Priority 1: If trail is long, return to territory
+  // Priority 1: Return to territory if trail is long
   if (!inTerritory && trailLength >= profile.returnThreshold) {
     state.currentGoal = 'return'
     const nearestTerritory = findNearestTerritory(ai.position, ai.territory)
@@ -292,10 +270,9 @@ export function getAIMove(ai: HexPlayer, gameState: HexGameState): HexDirection 
     }
   }
 
-  // Priority 2: Flee if danger is nearby and we have a trail
+  // Priority 2: Flee if danger nearby
   if (trailLength > 0 && isDangerNearby(ai.position, ai.id, gameState.players)) {
     state.currentGoal = 'flee'
-    // Try to return to territory
     const nearestTerritory = findNearestTerritory(ai.position, ai.territory)
     if (nearestTerritory) {
       const dir = getDirectionToward(ai.position, nearestTerritory)
@@ -303,11 +280,10 @@ export function getAIMove(ai: HexPlayer, gameState: HexGameState): HexDirection 
         return dir
       }
     }
-    // Otherwise pick a random safe direction
     return validDirs[Math.floor(Math.random() * validDirs.length)]
   }
 
-  // Priority 3: Go for powerups if one is nearby and we want it
+  // Priority 3: Go for powerups
   if (Math.random() < profile.powerUpFocus) {
     const nearestPowerUp = findNearestPowerUp(ai.position, gameState.powerUps)
     if (nearestPowerUp && hexDistance(ai.position, nearestPowerUp.position) <= 5) {
@@ -320,7 +296,7 @@ export function getAIMove(ai: HexPlayer, gameState: HexGameState): HexDirection 
     }
   }
 
-  // Priority 4: Chase players if aggressive
+  // Priority 4: Chase players
   if (Math.random() < profile.aggressiveness && inTerritory) {
     const nearestEnemy = findNearestEnemy(ai.position, ai.id, gameState.players)
     if (nearestEnemy && hexDistance(ai.position, nearestEnemy.position) <= 6) {
@@ -336,28 +312,23 @@ export function getAIMove(ai: HexPlayer, gameState: HexGameState): HexDirection 
   // Priority 5: Expand territory
   if (Math.random() < profile.territoryFocus || inTerritory) {
     state.currentGoal = 'expand'
-    // Move toward unclaimed territory
-    // Pick a direction that leads away from our territory center
     if (ai.territory.size > 0) {
-      // Calculate territory center
-      let sumQ = 0,
-        sumR = 0
+      let sumX = 0, sumY = 0
       for (const key of ai.territory) {
-        const [q, r] = key.split(',').map(Number)
-        sumQ += q
-        sumR += r
+        const [x, y] = key.split(',').map(Number)
+        sumX += x
+        sumY += y
       }
-      const centerQ = sumQ / ai.territory.size
-      const centerR = sumR / ai.territory.size
+      const centerX = sumX / ai.territory.size
+      const centerY = sumY / ai.territory.size
 
-      // Pick direction that moves away from center (to expand)
       let bestDir: HexDirection | null = null
       let bestDist = 0
 
       for (const dir of validDirs) {
         const next = getNeighbor(ai.position, dir)
         const distFromCenter = Math.sqrt(
-          Math.pow(next.q - centerQ, 2) + Math.pow(next.r - centerR, 2)
+          Math.pow(next.x - centerX, 2) + Math.pow(next.y - centerY, 2)
         )
         if (distFromCenter > bestDist) {
           bestDist = distFromCenter
@@ -371,11 +342,9 @@ export function getAIMove(ai: HexPlayer, gameState: HexGameState): HexDirection 
     }
   }
 
-  // Default: pick a random valid direction
   return validDirs[Math.floor(Math.random() * validDirs.length)]
 }
 
-// Clean up all AI states (called when game ends)
 export function clearAllAIStates(): void {
   aiState.clear()
 }

@@ -221,34 +221,31 @@ function broadcastGameState(lobby: HexLobby): void {
 function spawnPowerUp(gameState: HexGameState): void {
   if (gameState.powerUps.length >= MAX_POWERUPS_ON_GRID) return
 
-  // Find a random empty hex
-  const occupiedHexes = new Set<string>()
+  // Find a random empty cell
+  const occupiedCells = new Set<string>()
 
   for (const player of gameState.players.values()) {
-    occupiedHexes.add(hexToKey(player.position))
-    player.trail.forEach((h) => occupiedHexes.add(hexToKey(h)))
-    player.territory.forEach((k) => occupiedHexes.add(k))
+    occupiedCells.add(hexToKey(player.position))
+    player.trail.forEach((c) => occupiedCells.add(hexToKey(c)))
+    player.territory.forEach((k) => occupiedCells.add(k))
   }
 
-  gameState.powerUps.forEach((pu) => occupiedHexes.add(hexToKey(pu.position)))
+  gameState.powerUps.forEach((pu) => occupiedCells.add(hexToKey(pu.position)))
 
-  // Get all valid hexes
-  const validHexes: HexCoord[] = []
-  for (let q = -gameState.gridSize; q <= gameState.gridSize; q++) {
-    for (let r = -gameState.gridSize; r <= gameState.gridSize; r++) {
-      const s = -q - r
-      if (Math.abs(s) <= gameState.gridSize) {
-        const hex = { q, r }
-        if (!occupiedHexes.has(hexToKey(hex))) {
-          validHexes.push(hex)
-        }
+  // Get all valid cells (square grid)
+  const validCells: HexCoord[] = []
+  for (let x = 0; x < gameState.gridSize; x++) {
+    for (let y = 0; y < gameState.gridSize; y++) {
+      const cell = { x, y }
+      if (!occupiedCells.has(hexToKey(cell))) {
+        validCells.push(cell)
       }
     }
   }
 
-  if (validHexes.length === 0) return
+  if (validCells.length === 0) return
 
-  const position = validHexes[Math.floor(Math.random() * validHexes.length)]
+  const position = validCells[Math.floor(Math.random() * validCells.length)]
 
   // Decide type
   let type: PowerUpType
@@ -316,7 +313,7 @@ function checkPowerUpCollection(player: HexPlayer, gameState: HexGameState): voi
   }
 }
 
-// Flood fill to claim territory
+// Flood fill to claim territory (square grid version)
 function floodFillTerritory(
   player: HexPlayer,
   gameState: HexGameState
@@ -325,28 +322,25 @@ function floodFillTerritory(
   // The "inside" is the smaller region.
 
   const boundary = new Set<string>()
-  player.trail.forEach((h) => boundary.add(hexToKey(h)))
+  player.trail.forEach((c) => boundary.add(hexToKey(c)))
   player.territory.forEach((k) => boundary.add(k))
 
   // Find all connected regions outside the boundary
-  const allHexes = new Set<string>()
-  for (let q = -gameState.gridSize; q <= gameState.gridSize; q++) {
-    for (let r = -gameState.gridSize; r <= gameState.gridSize; r++) {
-      const s = -q - r
-      if (Math.abs(s) <= gameState.gridSize) {
-        allHexes.add(hexToKey({ q, r }))
-      }
+  const allCells = new Set<string>()
+  for (let x = 0; x < gameState.gridSize; x++) {
+    for (let y = 0; y < gameState.gridSize; y++) {
+      allCells.add(hexToKey({ x, y }))
     }
   }
 
-  // Remove boundary from all hexes
-  boundary.forEach((k) => allHexes.delete(k))
+  // Remove boundary from all cells
+  boundary.forEach((k) => allCells.delete(k))
 
   // Find regions using flood fill
   const regions: Set<string>[] = []
   const visited = new Set<string>()
 
-  for (const startKey of allHexes) {
+  for (const startKey of allCells) {
     if (visited.has(startKey)) continue
 
     const region = new Set<string>()
@@ -359,9 +353,15 @@ function floodFillTerritory(
       visited.add(key)
       region.add(key)
 
-      const hex = keyToHex(key)
-      for (const dir of Object.values(HEX_DIRECTIONS)) {
-        const neighbor = { q: hex.q + dir.q, r: hex.r + dir.r }
+      const coord = keyToHex(key)
+      // 4 directions for square grid
+      const neighbors = [
+        { x: coord.x + 1, y: coord.y },
+        { x: coord.x - 1, y: coord.y },
+        { x: coord.x, y: coord.y + 1 },
+        { x: coord.x, y: coord.y - 1 },
+      ]
+      for (const neighbor of neighbors) {
         if (isInBounds(neighbor, gameState.gridSize)) {
           const neighborKey = hexToKey(neighbor)
           if (!visited.has(neighborKey) && !boundary.has(neighborKey)) {
@@ -378,26 +378,22 @@ function floodFillTerritory(
 
   // The regions that touch the edge are "outside"
   // The regions that don't touch the edge are "inside" and should be claimed
-  const edgeHexes = new Set<string>()
-  for (let q = -gameState.gridSize; q <= gameState.gridSize; q++) {
-    for (let r = -gameState.gridSize; r <= gameState.gridSize; r++) {
-      const s = -q - r
-      if (
-        Math.abs(q) === gameState.gridSize ||
-        Math.abs(r) === gameState.gridSize ||
-        Math.abs(s) === gameState.gridSize
-      ) {
-        edgeHexes.add(hexToKey({ q, r }))
-      }
-    }
+  const edgeCells = new Set<string>()
+  for (let x = 0; x < gameState.gridSize; x++) {
+    edgeCells.add(hexToKey({ x, y: 0 }))
+    edgeCells.add(hexToKey({ x, y: gameState.gridSize - 1 }))
+  }
+  for (let y = 0; y < gameState.gridSize; y++) {
+    edgeCells.add(hexToKey({ x: 0, y }))
+    edgeCells.add(hexToKey({ x: gameState.gridSize - 1, y }))
   }
 
-  const claimedHexes = new Set<string>()
+  const claimedCells = new Set<string>()
 
   for (const region of regions) {
     let touchesEdge = false
     for (const key of region) {
-      if (edgeHexes.has(key)) {
+      if (edgeCells.has(key)) {
         touchesEdge = true
         break
       }
@@ -405,11 +401,11 @@ function floodFillTerritory(
 
     if (!touchesEdge) {
       // This region is enclosed - claim it
-      region.forEach((k) => claimedHexes.add(k))
+      region.forEach((k) => claimedCells.add(k))
     }
   }
 
-  return claimedHexes
+  return claimedCells
 }
 
 // Check collisions and handle eliminations
@@ -691,8 +687,18 @@ async function startRound(lobby: HexLobby): Promise<void> {
 
   broadcastLobbyUpdate(lobby)
 
+  // Broadcast countdown updates every second (for 3, 2, 1)
+  const countdownInterval = setInterval(() => {
+    if (gameState.status === 'countdown') {
+      broadcastLobbyUpdate(lobby)
+    } else {
+      clearInterval(countdownInterval)
+    }
+  }, 1000)
+
   // After countdown, start playing
   setTimeout(() => {
+    clearInterval(countdownInterval)
     if (gameState.status === 'countdown') {
       gameState.status = 'playing'
       gameState.roundStartTime = Date.now()
