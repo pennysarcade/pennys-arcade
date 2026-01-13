@@ -2,37 +2,53 @@ export default function About() {
   return (
     <div className="about-page">
       <div className="about-content">
-        <p className="about-welcome">
-          Welcome to Penny's Arcade. I've made some games for you to play.
-        </p>
+        <p className="about-welcome">Welcome to Penny's Arcade.</p>
 
         <section className="about-section">
-          <h2>The Vision</h2>
           <p>
-            The social spaces of the early internet were bound by shared obsessions.
-            Communities formed because they wanted to, and in those spaces a kind of
-            self-policing, anarchic freedom prevailed. They were chaotic, but they
-            felt real and alive. By comparison, today's internet is stale; it's been
-            sanitised, consolidated and siloed.
+            This is a solo project, built on evenings and weekends. The aim is to
+            recreate a sense of what the internet used to be like, and to inspire
+            others to nudge it in that direction again.
           </p>
 
           <p>
-            Penny's Arcade is my attempt to build a third place optimised for fun
-            and connection. This is a place to hang out, make friends and mash buttons.
-            To the extent that anything here is monetised, it's to keep the lights on,
-            not to hollow out the fundamentals in pursuit of infinite growth.
+            The social spaces of the early internet formed around shared passions,
+            and in those spaces a kind of self-policing, anarchic freedom prevailed.
+            They were chaotic, but they felt real.
           </p>
 
           <p>
-            The ultimate ambition is for Penny's Arcade to become a platform where
-            anyone can publish and distribute their web games — a social network
-            built around play. A place where indie developers can share their
-            creations and players can discover something new.
+            The platforms that dominate today are designed to hold your attention
+            for as long as possible, and they'll enrage or stupefy you until they
+            succeed. The communities that form on them feel transient and disposable.
+            I'm hoping to build something more durable—with regulars, inside jokes
+            that develop over months—and give a few people a place they feel like
+            they belong.
           </p>
+
+          <p>
+            Penny's Arcade is my attempt to build something different: a third place
+            optimised for play. A space to hang out, make friends, and mash buttons.
+            To the extent that anything here is ever monetised, it's to keep the
+            lights on, not to hollow out the fundamentals in pursuit of infinite
+            growth.
+          </p>
+
+          <p>
+            Right now, it's a chat window and a couple of arcade games. But the
+            ambition is larger: for this to become a platform where anyone can
+            publish and distribute their web games. A social network built around
+            having fun and sharing it. A place where indie developers can release
+            their creations and players can discover something new.
+          </p>
+
+          <p>We're not there yet. But we're building toward it.</p>
+
+          <p>If you want to know more or just say hello, you can find me in the chat.</p>
 
           <div className="manifesto-signature">
-            <span className="signature-dash">—</span>
-            <span className="signature-name">Penny xox</span>
+            <span className="signature-dash">–</span>
+            <span className="signature-name">Penny</span>
           </div>
         </section>
 
@@ -57,28 +73,10 @@ export default function About() {
         </section>
 
         <section className="about-section">
-          <h2>What's Next</h2>
+          <h2>Roadmap</h2>
 
           <div className="roadmap-category">
-            <h3>Social Features</h3>
-            <ul className="roadmap-list">
-              <li className="roadmap-item">
-                <span className="roadmap-status planned">Planned</span>
-                Friends list and direct messages
-              </li>
-              <li className="roadmap-item">
-                <span className="roadmap-status planned">Planned</span>
-                Profile badges and achievements
-              </li>
-              <li className="roadmap-item">
-                <span className="roadmap-status planned">Planned</span>
-                Challenge friends to beat your score
-              </li>
-            </ul>
-          </div>
-
-          <div className="roadmap-category">
-            <h3>Games & Content</h3>
+            <h3>Games</h3>
             <ul className="roadmap-list">
               <li className="roadmap-item">
                 <span className="roadmap-status planned">Planned</span>
@@ -86,7 +84,7 @@ export default function About() {
               </li>
               <li className="roadmap-item">
                 <span className="roadmap-status planned">Planned</span>
-                Weekly challenges and tournaments
+                Multiplayer options
               </li>
               <li className="roadmap-item">
                 <span className="roadmap-status planned">Planned</span>
@@ -96,15 +94,15 @@ export default function About() {
           </div>
 
           <div className="roadmap-category">
-            <h3>Platform</h3>
+            <h3>Social Features</h3>
             <ul className="roadmap-list">
               <li className="roadmap-item">
                 <span className="roadmap-status planned">Planned</span>
-                Mobile-friendly layout
+                Add friends
               </li>
               <li className="roadmap-item">
                 <span className="roadmap-status planned">Planned</span>
-                Game developer tools and SDK
+                Private messaging
               </li>
             </ul>
           </div>

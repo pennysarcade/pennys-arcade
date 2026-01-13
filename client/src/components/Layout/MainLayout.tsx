@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { useSocket } from '../../context/SocketContext'
 import { useResizablePanel } from '../../hooks/useResizablePanel'
+import { useDeviceType } from '../../hooks/useDeviceType'
 import ChatSidebar from '../Chat/ChatSidebar'
 import AuthModal from '../Auth/AuthModal'
 import ProfileModal from '../Profile/ProfileModal'
@@ -25,6 +26,7 @@ const HEADER_TABS = [
 export default function MainLayout({ children }: MainLayoutProps) {
   const { user, logout } = useAuth()
   const { maintenance } = useSocket()
+  const { setPreferredVersion } = useDeviceType()
   const location = useLocation()
   const navigate = useNavigate()
   const [showAuthModal, setShowAuthModal] = useState(false)
@@ -167,6 +169,13 @@ export default function MainLayout({ children }: MainLayoutProps) {
                 </button>
               </>
             )}
+            <button
+              className="btn btn-icon version-toggle"
+              onClick={() => setPreferredVersion('mobile')}
+              title="Switch to mobile version"
+            >
+              📱
+            </button>
           </div>
         </div>
         <button

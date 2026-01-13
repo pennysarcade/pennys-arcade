@@ -484,6 +484,24 @@ h3 {
   box-shadow: 0 0 15px var(--neon-magenta);
 }
 
+.btn-icon {
+  padding: 0.5rem 0.75rem;
+  font-size: 1rem;
+  border-color: var(--border-color);
+  color: var(--text-secondary);
+}
+
+.btn-icon:hover {
+  border-color: var(--neon-cyan);
+  color: var(--neon-cyan);
+  background: transparent;
+  box-shadow: none;
+}
+
+.version-toggle {
+  margin-left: 0.5rem;
+}
+
 .btn-discord {
   width: 100%;
   background: #5865F2;

@@ -1,15 +1,13 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
-import MainLayout from './components/Layout/MainLayout'
-import Home from './pages/Home'
-import Game from './pages/Game'
-import Leaderboard from './pages/Leaderboard'
-import Privacy from './pages/Privacy'
-import About from './pages/About'
+import { useDeviceType } from './hooks/useDeviceType'
+import DesktopApp from './layouts/DesktopApp'
+import MobileApp from './layouts/MobileApp'
 import Admin from './pages/Admin'
 
 function App() {
   const { isLoading, loadingProgress, loadingStatus } = useAuth()
+  const { isMobile } = useDeviceType()
 
   if (isLoading) {
     return (
@@ -35,18 +33,7 @@ function App() {
   return (
     <Routes>
       <Route path="/admin" element={<Admin />} />
-      <Route path="*" element={
-        <MainLayout>
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/game/:id" element={<Game />} />
-            <Route path="/about" element={<About />} />
-            <Route path="/leaderboard" element={<Leaderboard />} />
-            <Route path="/roadmap" element={<Navigate to="/about" replace />} />
-            <Route path="/privacy" element={<Privacy />} />
-          </Routes>
-        </MainLayout>
-      } />
+      <Route path="*" element={isMobile ? <MobileApp /> : <DesktopApp />} />
     </Routes>
   )
 }
