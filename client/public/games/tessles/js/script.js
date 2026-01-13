@@ -1637,12 +1637,14 @@ let startTime = Date.now();
 let spawnTimer = 0;
 let powerUpSpawnTimer = 0;
 let dangerZoneSoundCooldown = 0;
+let canvasClearedTime = 0; // Track when all enemies were cleared
 
 function init() {
     gameOver = false;
     startTime = Date.now();
     spawnTimer = 0;
     powerUpSpawnTimer = 300;
+    canvasClearedTime = 0;
     circles = [];
     particles = [];
     playerTrail = [];
@@ -1810,6 +1812,21 @@ function gameLoop() {
         } else {
             triggerWave(waveTypes[Math.floor(Math.random() * waveTypes.length)]);
         }
+    }
+
+    // Quick wave trigger when canvas is cleared (after initial 30s grace period)
+    if (elapsedSeconds >= 30 && circles.length === 0 && !currentWave) {
+        if (canvasClearedTime === 0) {
+            canvasClearedTime = Date.now();
+        } else if (Date.now() - canvasClearedTime >= 1000) {
+            // Trigger wave 1 second after canvas was cleared
+            lastWaveTime = elapsedSeconds;
+            const waveTypes = [WaveTypes.SWARM, WaveTypes.VORTEX, WaveTypes.CROSSFIRE];
+            triggerWave(waveTypes[Math.floor(Math.random() * waveTypes.length)]);
+            canvasClearedTime = 0;
+        }
+    } else if (circles.length > 0) {
+        canvasClearedTime = 0;
     }
 
     updateWave();
