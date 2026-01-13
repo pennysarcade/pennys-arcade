@@ -36,6 +36,7 @@ router.get('/', async (_req, res) => {
     const scores = await query<HighScore>(`
       SELECT h1.id, COALESCE(u.username, h1.username) as username,
              COALESCE(u.avatar_color, h1.avatar_color) as avatar_color,
+             u.avatar_image,
              h1.game_id, h1.score, h1.stats, h1.platform, h1.created_at
       FROM high_scores h1
       LEFT JOIN users u ON h1.user_id = u.id
@@ -463,6 +464,7 @@ router.get('/:gameId', async (req, res) => {
     const scores = await query<HighScore>(`
       SELECT h.id, COALESCE(u.username, h.username) as username,
              COALESCE(u.avatar_color, h.avatar_color) as avatar_color,
+             u.avatar_image,
              h.game_id, h.score, h.stats, h.platform, h.created_at
       FROM high_scores h
       LEFT JOIN users u ON h.user_id = u.id

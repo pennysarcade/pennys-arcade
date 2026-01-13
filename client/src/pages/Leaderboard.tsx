@@ -7,6 +7,7 @@ interface HighScore {
   id: number
   username: string
   avatar_color: string
+  avatar_image: string | null
   game_id: string
   score: number
   platform?: string
@@ -134,10 +135,18 @@ export default function Leaderboard() {
                     {!selectedGame && <td>{getGameName(score.game_id)}</td>}
                     <td>
                       <span className="leaderboard-player">
-                        <span
-                          className="leaderboard-avatar"
-                          style={{ backgroundColor: score.avatar_color }}
-                        />
+                        {score.avatar_image ? (
+                          <img
+                            src={score.avatar_image}
+                            alt=""
+                            className="leaderboard-avatar leaderboard-avatar-img"
+                          />
+                        ) : (
+                          <span
+                            className="leaderboard-avatar"
+                            style={{ backgroundColor: score.avatar_color }}
+                          />
+                        )}
                         {score.username}
                         {score.platform === 'mobile' && (
                           <span className="platform-badge mobile" title="Played on mobile">M</span>

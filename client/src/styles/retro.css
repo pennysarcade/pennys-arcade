@@ -2157,6 +2157,12 @@ body.resizing * {
   flex-shrink: 0;
 }
 
+.leaderboard-avatar-img {
+  object-fit: cover;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
 .platform-badge {
   display: inline-flex;
   align-items: center;
