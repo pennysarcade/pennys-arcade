@@ -340,6 +340,53 @@ const AudioSystem = {
         osc.stop(this.ctx.currentTime + 0.5);
     },
 
+    playFury() {
+        if (!this.ctx) return;
+        // Aggressive rising tone
+        const osc = this.ctx.createOscillator();
+        const osc2 = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(150, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(600, this.ctx.currentTime + 0.3);
+
+        osc2.type = 'square';
+        osc2.frequency.setValueAtTime(200, this.ctx.currentTime);
+        osc2.frequency.exponentialRampToValueAtTime(800, this.ctx.currentTime + 0.3);
+
+        gain.gain.setValueAtTime(0.35, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.5);
+
+        osc.connect(gain);
+        osc2.connect(gain);
+        gain.connect(this.sfxGain);
+
+        osc.start();
+        osc2.start();
+        osc.stop(this.ctx.currentTime + 0.5);
+        osc2.stop(this.ctx.currentTime + 0.5);
+    },
+
+    playFuryKill() {
+        if (!this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(400, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(200, this.ctx.currentTime + 0.1);
+
+        gain.gain.setValueAtTime(0.25, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+
+        osc.connect(gain);
+        gain.connect(this.sfxGain);
+
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.15);
+    },
+
     playShieldHit() {
         if (!this.ctx) return;
         const osc = this.ctx.createOscillator();
@@ -734,7 +781,8 @@ const PowerUpTypes = {
     SHRINK: { color: '#ff00ff', symbol: 'X', duration: 5000 },
     BOMB: { color: '#ff4400', symbol: 'B', duration: 0 },
     FREEZE: { color: '#88ffff', symbol: 'F', duration: 3000 },
-    MINE: { color: '#ffaa00', symbol: 'M', duration: 5000 }
+    MINE: { color: '#ffaa00', symbol: 'M', duration: 5000 },
+    FURY: { color: '#ff0000', symbol: 'R', duration: 18000 }
 };
 
 class PowerUp {
@@ -956,7 +1004,9 @@ let activePowerUps = {
     slowmo: false,
     shrink: false,
     freeze: false,
-    mine: false
+    mine: false,
+    fury: false,
+    furyEndTime: 0
 };
 const MAX_SHIELDS = 3;
 let powerUpTimers = {};
@@ -1047,6 +1097,19 @@ function activatePowerUp(type) {
             powerUpTimers.mine = setTimeout(() => {
                 activePowerUps.mine = false;
             }, PowerUpTypes.MINE.duration);
+            break;
+
+        case 'FURY':
+            activePowerUps.fury = true;
+            activePowerUps.furyEndTime = Date.now() + PowerUpTypes.FURY.duration;
+            AudioSystem.playFury();
+            triggerScreenShake(10);
+            spawnParticles(player.x, player.y, '#ff0000', 20, 8, 40, 6);
+            clearTimeout(powerUpTimers.fury);
+            powerUpTimers.fury = setTimeout(() => {
+                activePowerUps.fury = false;
+                activePowerUps.furyEndTime = 0;
+            }, PowerUpTypes.FURY.duration);
             break;
     }
 }
@@ -1502,6 +1565,12 @@ const player = {
             ctx.restore();
         }
 
+        // Check fury mode and blinking
+        const isFury = activePowerUps.fury;
+        const furyTimeLeft = activePowerUps.furyEndTime - Date.now();
+        const furyBlinking = isFury && furyTimeLeft <= 2000;
+        const furyVisible = !furyBlinking || Math.floor(Date.now() / 100) % 2 === 0;
+
         const glowGradient = ctx.createRadialGradient(
             this.x, this.y, 0,
             this.x, this.y, effectiveRadius * 3
@@ -1511,6 +1580,10 @@ const player = {
             glowGradient.addColorStop(0, 'rgba(255, 0, 255, 0.5)');
             glowGradient.addColorStop(0.5, 'rgba(255, 0, 255, 0.2)');
             glowGradient.addColorStop(1, 'rgba(255, 0, 255, 0)');
+        } else if (isFury) {
+            glowGradient.addColorStop(0, 'rgba(255, 0, 0, 0.6)');
+            glowGradient.addColorStop(0.5, 'rgba(255, 0, 0, 0.3)');
+            glowGradient.addColorStop(1, 'rgba(255, 0, 0, 0)');
         } else {
             glowGradient.addColorStop(0, 'rgba(255, 255, 255, 0.3)');
             glowGradient.addColorStop(0.5, 'rgba(0, 255, 255, 0.1)');
@@ -1523,20 +1596,28 @@ const player = {
         ctx.fill();
 
         ctx.beginPath();
-        ctx.fillStyle = this.isDashing ? '#ff00ff' : 'white';
+        let playerFillColor = 'white';
+        if (this.isDashing) playerFillColor = '#ff00ff';
+        else if (isFury && furyVisible) playerFillColor = '#ff0000';
+        ctx.fillStyle = playerFillColor;
         ctx.imageSmoothingEnabled = true;
 
-        if (isPulsing && !this.isDashing) {
+        if (isPulsing && !this.isDashing && !isFury) {
             ctx.globalAlpha = 1 - pulseAlpha * 0.3;
+        } else if (isFury && !furyVisible) {
+            ctx.globalAlpha = 0.3;
         } else {
             ctx.globalAlpha = 1;
         }
 
         ctx.arc(this.x, this.y, effectiveRadius, 0, Math.PI * 2);
 
-        ctx.strokeStyle = this.isDashing ? '#ffffff' : (combo > 5 ? "#ff00ff" : "#00ffff");
+        let strokeColor = combo > 5 ? "#ff00ff" : "#00ffff";
+        if (this.isDashing) strokeColor = '#ffffff';
+        else if (isFury) strokeColor = '#ff0000';
+        ctx.strokeStyle = strokeColor;
         ctx.lineWidth = 3;
-        ctx.shadowColor = this.isDashing ? '#ff00ff' : (combo > 5 ? "#ff00ff" : "#00ffff");
+        ctx.shadowColor = strokeColor;
         ctx.shadowBlur = 15;
         ctx.stroke();
 
@@ -1589,7 +1670,7 @@ function init() {
     player.isShrunk = false;
     screenShake = { x: 0, y: 0, intensity: 0 };
 
-    activePowerUps = { shield: 0, slowmo: false, shrink: false, freeze: false, mine: false };
+    activePowerUps = { shield: 0, slowmo: false, shrink: false, freeze: false, mine: false, fury: false, furyEndTime: 0 };
     Object.keys(powerUpTimers).forEach(key => clearTimeout(powerUpTimers[key]));
     powerUpTimers = {};
 
@@ -1859,6 +1940,18 @@ function gameLoop() {
         }
 
         if (!player.isDashing && collision(player, gameCircle)) {
+            // Fury mode: player destroys enemies on contact
+            if (activePowerUps.fury) {
+                AudioSystem.playFuryKill();
+                spawnParticles(gameCircle.x, gameCircle.y, '#ff0000', 12, 5, 35, 5);
+                spawnParticles(gameCircle.x, gameCircle.y, `hsl(${gameCircle.hue}, 100%, 50%)`, 8, 4, 25, 4);
+                addScore(100, gameCircle.x, gameCircle.y);
+                triggerScreenShake(5);
+                circles.splice(i, 1);
+                i--;
+                continue;
+            }
+
             if (activePowerUps.shield > 0) {
                 activePowerUps.shield--;
                 AudioSystem.playShieldHit();

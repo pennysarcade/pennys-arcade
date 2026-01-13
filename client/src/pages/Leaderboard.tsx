@@ -140,6 +140,7 @@ export default function Leaderboard() {
                             src={`/avatars/${score.avatar_image}`}
                             alt=""
                             className="leaderboard-avatar leaderboard-avatar-img"
+                            style={{ borderColor: score.avatar_color }}
                           />
                         ) : (
                           <span
