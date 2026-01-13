@@ -913,18 +913,13 @@ function handleMove(socket: Socket, direction: HexDirection): void {
 export async function setupHexgridSocket(io: Server): Promise<void> {
   ioInstance = io
 
-  io.on('connection', async (socket: Socket) => {
-    console.log('[HEXGRID] Socket connection attempt:', socket.id)
-
-    // Authenticate socket
+  // Use middleware to authenticate sockets BEFORE connection event fires
+  // This ensures userId is set by the time event handlers run
+  io.use(async (socket, next) => {
     const token = socket.handshake.auth?.token
-    console.log('[HEXGRID] Socket auth token present:', !!token)
-
     if (token) {
       try {
         const decoded = verifyToken(token)
-        console.log('[HEXGRID] Token decoded:', decoded ? 'success' : 'failed')
-
         if (decoded && typeof decoded === 'object' && 'userId' in decoded) {
           const userId = (decoded as any).userId
           const users = await query<{ id: number; username: string; avatar_color: string; avatar_image: string | null }>(
@@ -937,14 +932,18 @@ export async function setupHexgridSocket(io: Server): Promise<void> {
             ;(socket as any).username = user.username
             ;(socket as any).avatarColor = user.avatar_color
             ;(socket as any).avatarImage = user.avatar_image
-            console.log('[HEXGRID] User authenticated:', user.username)
+            console.log('[HEXGRID] Middleware: User authenticated:', user.username)
           }
         }
       } catch (err) {
-        console.error('[HEXGRID] Token verification failed:', err)
-        // Invalid token, continue as guest (but hexgrid requires auth)
+        console.error('[HEXGRID] Middleware: Token verification failed:', err)
       }
     }
+    next() // Always allow connection, just won't have userId for guests
+  })
+
+  io.on('connection', (socket: Socket) => {
+    console.log('[HEXGRID] Socket connected:', socket.id, '- userId:', (socket as any).userId)
 
     // Hexgrid event handlers
     socket.on('hexgrid:join', (data: { lobbyId: string }) => {
