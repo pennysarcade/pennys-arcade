@@ -2,9 +2,9 @@ export default function About() {
   return (
     <div className="about-page">
       <div className="about-content">
-        <p className="about-welcome">Welcome to Penny's Arcade.</p>
-
         <section className="about-section">
+          <p className="about-welcome">Welcome to Penny's Arcade.</p>
+
           <p>
             This is a solo project, built on evenings and weekends. The aim is to
             recreate a sense of what the internet used to be like, and to inspire
@@ -103,6 +103,20 @@ export default function About() {
               <li className="roadmap-item">
                 <span className="roadmap-status planned">Planned</span>
                 Private messaging
+              </li>
+            </ul>
+          </div>
+
+          <div className="roadmap-category">
+            <h3>Platform</h3>
+            <ul className="roadmap-list">
+              <li className="roadmap-item">
+                <span className="roadmap-status planned">Planned</span>
+                Currency system
+                <p className="roadmap-description">
+                  Earn coins by playing games and spend them on upgrades, cosmetics,
+                  and other rewards across the platform.
+                </p>
               </li>
             </ul>
           </div>

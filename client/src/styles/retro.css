@@ -2289,8 +2289,9 @@ body.resizing * {
 
 .roadmap-item {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.5rem 0.75rem;
   padding: 0.5rem 0;
   color: var(--text-secondary);
   font-size: 1rem;
@@ -2326,6 +2327,15 @@ body.resizing * {
   background: rgba(0, 255, 0, 0.15);
   color: var(--neon-green);
   border: 1px solid rgba(0, 255, 0, 0.3);
+}
+
+.roadmap-description {
+  width: 100%;
+  margin: 0.25rem 0 0 0;
+  padding-left: calc(0.75rem + 60px); /* Align with text after status badge */
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.4;
 }
 
 /* ============================================
