@@ -624,7 +624,7 @@ function gameTick(lobby: HexLobby): void {
 }
 
 // Start the game round
-function startRound(lobby: HexLobby): void {
+async function startRound(lobby: HexLobby): Promise<void> {
   const gameState = lobby.gameState
 
   // Reset game state for new round
@@ -633,18 +633,21 @@ function startRound(lobby: HexLobby): void {
   clearAllAIStates()
   lastMoveTime.clear()
   pendingDirections.clear()
+  socketToPlayer.clear()
 
-  // Add real players back
+  // Find all authenticated sockets in the lobby room
   const realPlayerSockets = new Set<string>()
-  for (const [socketId, playerId] of socketToPlayer) {
-    // Check if this socket is in our lobby room
-    const socket = ioInstance?.sockets.sockets.get(socketId)
-    if (socket?.rooms.has(`hexgrid:${lobby.id}`)) {
-      realPlayerSockets.add(socketId)
+
+  // Get all sockets in the room
+  const socketsInRoom = await ioInstance?.in(`hexgrid:${lobby.id}`).fetchSockets()
+  for (const socket of socketsInRoom || []) {
+    // Only add authenticated users (not guests)
+    if ((socket as any).userId) {
+      realPlayerSockets.add(socket.id)
     }
   }
 
-  // Also add spectators as players for the new round
+  // Also add spectators (they should already be in the room, but just in case)
   for (const socketId of lobby.spectators) {
     realPlayerSockets.add(socketId)
   }
@@ -803,8 +806,8 @@ async function endRound(lobby: HexLobby): Promise<void> {
 
     // Auto-start next round if there are players
     if (lobby.realPlayerCount > 0) {
-      setTimeout(() => {
-        startRound(lobby)
+      setTimeout(async () => {
+        await startRound(lobby)
       }, 2000)
     }
   }, 5000)
@@ -842,9 +845,9 @@ function handleJoin(socket: Socket, lobbyId: string): void {
 
       // If game is waiting and we just got first player, fill with AI and start
       if (lobby.gameState.status === 'waiting' && lobby.realPlayerCount === 1) {
-        setTimeout(() => {
+        setTimeout(async () => {
           if (lobby.gameState.status === 'waiting') {
-            startRound(lobby)
+            await startRound(lobby)
           }
         }, 1000)
       }

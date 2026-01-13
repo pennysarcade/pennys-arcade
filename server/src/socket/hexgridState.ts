@@ -145,9 +145,9 @@ export const HEX_GRID_SIZE = 7 // Grid radius (creates ~127 hexes)
 export const MAX_PLAYERS = 8
 export const ROUND_DURATION = 75000 // 75 seconds
 export const COUNTDOWN_DURATION = 3000 // 3 seconds
-export const TICK_RATE = 20 // 20 updates per second (50ms)
-export const MOVE_INTERVAL = 350 // Players move every 350ms (~3 moves/sec)
-export const SPEED_BOOST_MOVE_INTERVAL = 233 // ~4.3 moves/sec with speed boost
+export const TICK_RATE = 30 // 30 updates per second (~33ms) for smoother rendering
+export const MOVE_INTERVAL = 450 // Players move every 450ms (~2.2 moves/sec)
+export const SPEED_BOOST_MOVE_INTERVAL = 300 // ~3.3 moves/sec with speed boost
 
 // Scoring
 export const POINTS_PER_TILE = 5
