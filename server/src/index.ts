@@ -94,7 +94,8 @@ async function startServer() {
 
   // Setup WebSocket handlers
   await setupChatSocket(io)
-  await setupHexgridSocket(io)
+  // HEXGRID - temporarily offline for further development
+  // await setupHexgridSocket(io)
 
   const PORT = process.env.PORT || 3001
 
