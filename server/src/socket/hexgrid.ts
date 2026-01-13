@@ -415,16 +415,6 @@ function checkCollisions(gameState: HexGameState): PlayerEliminatedData[] {
   for (const [playerId, player] of gameState.players) {
     if (!player.isAlive) continue
 
-    // Check boundary collision - just stop movement, don't kill
-    if (!isInBounds(player.position, gameState.gridSize)) {
-      // Move back to previous position (undo the move)
-      if (player.trail.length > 0) {
-        player.position = player.trail.pop()!
-      }
-      player.direction = null // Stop moving
-      continue
-    }
-
     // Check collision with other players' trails
     for (const [otherId, other] of gameState.players) {
       if (otherId === playerId || !other.isAlive) continue
@@ -576,6 +566,12 @@ function gameTick(lobby: HexLobby): void {
       lastMoveTime.set(playerId, now)
 
       const newPos = getNeighbor(player.position, player.direction)
+
+      // Check boundary BEFORE moving - stop at edges, don't move off grid
+      if (!isInBounds(newPos, gameState.gridSize)) {
+        player.direction = null // Stop moving at edge
+        continue
+      }
 
       // Add current position to trail if not in own territory
       if (!player.territory.has(hexToKey(player.position))) {

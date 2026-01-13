@@ -118,6 +118,73 @@ function getValidDirections(
   return validDirs
 }
 
+// Score a direction based on how many options it leaves open (look-ahead)
+function scoreDirection(
+  position: HexCoord,
+  direction: HexDirection,
+  gridSize: number,
+  trail: HexCoord[],
+  allPlayers: Map<string, HexPlayer>,
+  playerId: string,
+  depth: number = 2
+): number {
+  const next = getNeighbor(position, direction)
+  if (!isInBounds(next, gridSize)) return -100
+
+  // Create a hypothetical trail including current position
+  const hypotheticalTrail = [...trail, position]
+
+  // Count valid moves from next position
+  const nextValidDirs = getValidDirections(next, gridSize, hypotheticalTrail, allPlayers, playerId)
+
+  if (nextValidDirs.length === 0) return -50 // Dead end
+
+  let score = nextValidDirs.length * 10
+
+  // Penalize being too close to edges
+  const edgeDist = Math.min(next.x, next.y, gridSize - 1 - next.x, gridSize - 1 - next.y)
+  if (edgeDist <= 1) score -= 15
+  if (edgeDist === 0) score -= 25
+
+  // Look ahead one more step if depth allows
+  if (depth > 1) {
+    let bestFutureScore = -100
+    for (const futureDir of nextValidDirs) {
+      const futureScore = scoreDirection(next, futureDir, gridSize, hypotheticalTrail, allPlayers, playerId, depth - 1)
+      bestFutureScore = Math.max(bestFutureScore, futureScore)
+    }
+    score += bestFutureScore * 0.5
+  }
+
+  return score
+}
+
+// Get the best direction considering future options
+function getBestScoredDirection(
+  position: HexCoord,
+  validDirs: HexDirection[],
+  gridSize: number,
+  trail: HexCoord[],
+  allPlayers: Map<string, HexPlayer>,
+  playerId: string
+): HexDirection | null {
+  if (validDirs.length === 0) return null
+  if (validDirs.length === 1) return validDirs[0]
+
+  let bestDir: HexDirection | null = null
+  let bestScore = -Infinity
+
+  for (const dir of validDirs) {
+    const score = scoreDirection(position, dir, gridSize, trail, allPlayers, playerId)
+    if (score > bestScore) {
+      bestScore = score
+      bestDir = dir
+    }
+  }
+
+  return bestDir || validDirs[0]
+}
+
 // Find direction toward a target (square grid)
 function getDirectionToward(from: HexCoord, to: HexCoord): HexDirection | null {
   const dx = to.x - from.x
@@ -309,40 +376,36 @@ export function getAIMove(ai: HexPlayer, gameState: HexGameState): HexDirection 
     }
   }
 
-  // Priority 5: Expand territory
+  // Priority 5: Expand territory smartly
   if (Math.random() < profile.territoryFocus || inTerritory) {
     state.currentGoal = 'expand'
-    if (ai.territory.size > 0) {
-      let sumX = 0, sumY = 0
-      for (const key of ai.territory) {
-        const [x, y] = key.split(',').map(Number)
-        sumX += x
-        sumY += y
-      }
-      const centerX = sumX / ai.territory.size
-      const centerY = sumY / ai.territory.size
 
-      let bestDir: HexDirection | null = null
-      let bestDist = 0
+    // Use scoring to find the best direction that avoids dead ends
+    const bestDir = getBestScoredDirection(
+      ai.position,
+      validDirs,
+      gameState.gridSize,
+      ai.trail,
+      gameState.players,
+      ai.id
+    )
 
-      for (const dir of validDirs) {
-        const next = getNeighbor(ai.position, dir)
-        const distFromCenter = Math.sqrt(
-          Math.pow(next.x - centerX, 2) + Math.pow(next.y - centerY, 2)
-        )
-        if (distFromCenter > bestDist) {
-          bestDist = distFromCenter
-          bestDir = dir
-        }
-      }
-
-      if (bestDir) {
-        return bestDir
-      }
+    if (bestDir) {
+      return bestDir
     }
   }
 
-  return validDirs[Math.floor(Math.random() * validDirs.length)]
+  // Fallback: use scoring even for random movement to avoid dead ends
+  const safestDir = getBestScoredDirection(
+    ai.position,
+    validDirs,
+    gameState.gridSize,
+    ai.trail,
+    gameState.players,
+    ai.id
+  )
+
+  return safestDir || validDirs[Math.floor(Math.random() * validDirs.length)]
 }
 
 export function clearAllAIStates(): void {

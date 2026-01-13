@@ -22,7 +22,36 @@ export class HexRenderer {
         // Grid cells cache
         this.gridCells = [];
 
+        // Avatar image cache
+        this.avatarImages = new Map(); // url -> { img: Image, loaded: boolean }
+
         this.resize();
+    }
+
+    // Load and cache an avatar image
+    loadAvatarImage(url) {
+        if (!url) return null;
+
+        if (this.avatarImages.has(url)) {
+            const cached = this.avatarImages.get(url);
+            return cached.loaded ? cached.img : null;
+        }
+
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        const cache = { img, loaded: false };
+        this.avatarImages.set(url, cache);
+
+        img.onload = () => {
+            cache.loaded = true;
+        };
+        img.onerror = () => {
+            // Remove from cache so we don't keep trying
+            this.avatarImages.delete(url);
+        };
+        img.src = url;
+
+        return null;
     }
 
     resize() {
@@ -253,7 +282,8 @@ export class HexRenderer {
     drawPlayer(player, isLocalPlayer = false) {
         // Use interpolated position for smooth movement
         const pos = this.getInterpolatedPosition(player.id, player.position);
-        const radius = this.cellSize * 0.35;
+        const size = this.cellSize * 0.7; // Square size
+        const halfSize = size / 2;
 
         // Glow effect for local player
         if (isLocalPlayer) {
@@ -262,17 +292,43 @@ export class HexRenderer {
             this.ctx.shadowBlur = 15;
         }
 
-        // Draw avatar circle with border
-        this.ctx.beginPath();
-        this.ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
+        // Try to get avatar image
+        const avatarImg = player.avatarImage ? this.loadAvatarImage(player.avatarImage) : null;
 
-        this.ctx.fillStyle = player.avatarColor;
-        this.ctx.fill();
+        if (avatarImg) {
+            // Draw square avatar image with colored border
+            this.ctx.save();
 
-        // Border
-        this.ctx.strokeStyle = '#ffffff';
-        this.ctx.lineWidth = 2;
-        this.ctx.stroke();
+            // Draw border first (slightly larger square)
+            const borderSize = 3;
+            this.ctx.fillStyle = player.avatarColor;
+            this.ctx.fillRect(
+                pos.x - halfSize - borderSize,
+                pos.y - halfSize - borderSize,
+                size + borderSize * 2,
+                size + borderSize * 2
+            );
+
+            // Draw the image
+            this.ctx.drawImage(
+                avatarImg,
+                pos.x - halfSize,
+                pos.y - halfSize,
+                size,
+                size
+            );
+
+            this.ctx.restore();
+        } else {
+            // Draw colored square as fallback
+            this.ctx.fillStyle = player.avatarColor;
+            this.ctx.fillRect(pos.x - halfSize, pos.y - halfSize, size, size);
+
+            // Border
+            this.ctx.strokeStyle = '#ffffff';
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeRect(pos.x - halfSize, pos.y - halfSize, size, size);
+        }
 
         if (isLocalPlayer) {
             this.ctx.restore();
@@ -280,7 +336,7 @@ export class HexRenderer {
 
         // Draw direction indicator
         if (player.direction && player.isAlive) {
-            this.drawDirectionArrow(pos.x, pos.y, radius, player.direction, player.avatarColor);
+            this.drawDirectionArrow(pos.x, pos.y, halfSize, player.direction, player.avatarColor);
         }
 
         // Draw freeze effect
@@ -289,9 +345,7 @@ export class HexRenderer {
             this.ctx.strokeStyle = '#88ccff';
             this.ctx.lineWidth = 3;
             this.ctx.setLineDash([4, 4]);
-            this.ctx.beginPath();
-            this.ctx.arc(pos.x, pos.y, radius + 5, 0, Math.PI * 2);
-            this.ctx.stroke();
+            this.ctx.strokeRect(pos.x - halfSize - 5, pos.y - halfSize - 5, size + 10, size + 10);
             this.ctx.setLineDash([]);
             this.ctx.restore();
         }
@@ -303,9 +357,8 @@ export class HexRenderer {
             this.ctx.lineWidth = 2;
             for (let i = 0; i < 3; i++) {
                 this.ctx.globalAlpha = 0.3 - i * 0.1;
-                this.ctx.beginPath();
-                this.ctx.arc(pos.x, pos.y, radius + 8 + i * 4, 0, Math.PI * 2);
-                this.ctx.stroke();
+                const offset = 8 + i * 4;
+                this.ctx.strokeRect(pos.x - halfSize - offset, pos.y - halfSize - offset, size + offset * 2, size + offset * 2);
             }
             this.ctx.restore();
         }
@@ -316,7 +369,7 @@ export class HexRenderer {
             this.ctx.font = 'bold 12px "Press Start 2P"';
             this.ctx.fillStyle = '#ffd700';
             this.ctx.textAlign = 'center';
-            this.ctx.fillText('2X', pos.x, pos.y - radius - 8);
+            this.ctx.fillText('2X', pos.x, pos.y - halfSize - 8);
             this.ctx.restore();
         }
 
@@ -325,7 +378,7 @@ export class HexRenderer {
         this.ctx.font = '8px "Press Start 2P"';
         this.ctx.fillStyle = '#ffffff';
         this.ctx.textAlign = 'center';
-        this.ctx.fillText(player.username.substring(0, 8), pos.x, pos.y + radius + 14);
+        this.ctx.fillText(player.username.substring(0, 8), pos.x, pos.y + halfSize + 14);
         this.ctx.restore();
     }
 
