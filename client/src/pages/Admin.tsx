@@ -79,20 +79,25 @@ interface HighScore {
   created_at: string
 }
 
-const playableGames = GAMES.filter(g => g.banner)
+// All games including hidden/offline ones (for admin purposes)
+const ALL_ADMIN_GAMES = [
+  ...GAMES.filter(g => g.banner),
+  { id: 'hexgrid', title: 'HEXGRID (offline)' },
+]
 
-type Tab = 'dashboard' | 'users' | 'messages' | 'sessions' | 'settings' | 'scores' | 'wordfilter' | 'audit'
+type Tab = 'overview' | 'users' | 'content' | 'games' | 'settings'
 
 export default function Admin() {
   const { user, token } = useAuth()
   const { chatStatus } = useSocket()
   const navigate = useNavigate()
 
-  const [activeTab, setActiveTab] = useState<Tab>('dashboard')
+  const [activeTab, setActiveTab] = useState<Tab>('overview')
   const [loading, setLoading] = useState(true)
 
-  // Dashboard
+  // Overview/Dashboard
   const [stats, setStats] = useState<Stats | null>(null)
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([])
 
   // Users
   const [users, setUsers] = useState<User[]>([])
@@ -100,13 +105,19 @@ export default function Admin() {
   const [userSort, setUserSort] = useState('created_at')
   const [userOrder, setUserOrder] = useState('desc')
 
-  // Messages
+  // Content (Messages + Word Filter)
   const [messages, setMessages] = useState<Message[]>([])
   const [messageSearch, setMessageSearch] = useState('')
+  const [wordFilters, setWordFilters] = useState<WordFilter[]>([])
+  const [newWord, setNewWord] = useState('')
+  const [newWordRegex, setNewWordRegex] = useState(false)
 
-  // Sessions
+  // Games (Sessions + Scores)
   const [sessions, setSessions] = useState<GameSession[]>([])
   const [sessionStatus, setSessionStatus] = useState('playing')
+  const [scores, setScores] = useState<HighScore[]>([])
+  const [selectedGame, setSelectedGame] = useState(ALL_ADMIN_GAMES[0]?.id || '')
+  const [wipePassword, setWipePassword] = useState('')
 
   // Settings
   const [offlineMessage, setOfflineMessage] = useState('')
@@ -116,19 +127,6 @@ export default function Admin() {
   const [maintenanceMessage, setMaintenanceMessage] = useState('')
   const [announcementText, setAnnouncementText] = useState('')
   const [chatRateLimit, setChatRateLimit] = useState(1000)
-
-  // Scores
-  const [scores, setScores] = useState<HighScore[]>([])
-  const [selectedGame, setSelectedGame] = useState(playableGames[0]?.id || '')
-  const [wipePassword, setWipePassword] = useState('')
-
-  // Word Filter
-  const [wordFilters, setWordFilters] = useState<WordFilter[]>([])
-  const [newWord, setNewWord] = useState('')
-  const [newWordRegex, setNewWordRegex] = useState(false)
-
-  // Audit Log
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([])
 
   // Ban Modal
   const [banModal, setBanModal] = useState<{ userId: number; username: string } | null>(null)
@@ -243,7 +241,7 @@ export default function Admin() {
 
   const fetchAuditLog = useCallback(async () => {
     try {
-      const res = await fetch('/api/auth/admin/audit-log?limit=100', {
+      const res = await fetch('/api/auth/admin/audit-log?limit=50', {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       if (res.ok) {
@@ -261,15 +259,19 @@ export default function Admin() {
     fetchStats()
     fetchUsers()
     fetchSettings()
-  }, [user, navigate, fetchStats, fetchUsers, fetchSettings])
+    fetchAuditLog()
+  }, [user, navigate, fetchStats, fetchUsers, fetchSettings, fetchAuditLog])
 
   useEffect(() => {
-    if (activeTab === 'messages') fetchMessages()
-    if (activeTab === 'sessions') fetchSessions()
-    if (activeTab === 'scores' && selectedGame) fetchScores(selectedGame)
-    if (activeTab === 'wordfilter') fetchWordFilter()
-    if (activeTab === 'audit') fetchAuditLog()
-  }, [activeTab, fetchMessages, fetchSessions, fetchScores, selectedGame, fetchWordFilter, fetchAuditLog])
+    if (activeTab === 'content') {
+      fetchMessages()
+      fetchWordFilter()
+    }
+    if (activeTab === 'games') {
+      fetchSessions()
+      if (selectedGame) fetchScores(selectedGame)
+    }
+  }, [activeTab, fetchMessages, fetchSessions, fetchScores, selectedGame, fetchWordFilter])
 
   // Handlers
   const handleToggleChat = async (enable: boolean) => {
@@ -519,26 +521,23 @@ export default function Admin() {
     <div className="admin-panel">
       <div className="admin-panel-header">
         <h1>Admin Panel</h1>
-        <button className="btn btn-secondary" onClick={() => navigate('/')}>
-          Back to Site
-        </button>
       </div>
 
       <div className="admin-nav">
-        {(['dashboard', 'users', 'messages', 'sessions', 'settings', 'scores', 'wordfilter', 'audit'] as Tab[]).map(tab => (
+        {(['overview', 'users', 'content', 'games', 'settings'] as Tab[]).map(tab => (
           <button
             key={tab}
             className={`admin-nav-btn ${activeTab === tab ? 'active' : ''}`}
             onClick={() => setActiveTab(tab)}
           >
-            {tab === 'wordfilter' ? 'Word Filter' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+            {tab.charAt(0).toUpperCase() + tab.slice(1)}
             {tab === 'users' && ` (${users.length})`}
           </button>
         ))}
       </div>
 
-      {/* Dashboard */}
-      {activeTab === 'dashboard' && (
+      {/* Overview Tab - Dashboard + Audit */}
+      {activeTab === 'overview' && (
         <>
           <div className="stats-grid">
             <div className="stat-card">
@@ -580,10 +579,28 @@ export default function Admin() {
               </div>
             </div>
           </div>
+
+          <div className="admin-card">
+            <h2>Recent Activity</h2>
+            <div style={{ maxHeight: 300, overflow: 'auto' }}>
+              {auditLogs.length === 0 ? <div className="empty">No audit logs</div> : (
+                auditLogs.slice(0, 20).map(log => (
+                  <div key={log.id} className="audit-item">
+                    <span className="audit-time">{formatDate(log.created_at)}</span>
+                    <div className="audit-action">
+                      <strong>{log.admin_username}</strong> {log.action}
+                      {log.target_name && <> on <strong>{log.target_name}</strong></>}
+                      {log.details && <div className="audit-details">{log.details}</div>}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </>
       )}
 
-      {/* Users */}
+      {/* Users Tab */}
       {activeTab === 'users' && (
         <div className="admin-card">
           <div className="search-bar">
@@ -664,81 +681,187 @@ export default function Admin() {
         </div>
       )}
 
-      {/* Messages */}
-      {activeTab === 'messages' && (
-        <div className="admin-card">
-          <div className="search-bar">
-            <input
-              type="text"
-              className="form-input"
-              placeholder="Search messages..."
-              value={messageSearch}
-              onChange={e => setMessageSearch(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && fetchMessages()}
-            />
-            <button className="btn btn-primary" onClick={fetchMessages}>Search</button>
-            <button className="btn btn-danger" onClick={handleClearChat}>Clear All</button>
+      {/* Content Tab - Messages + Word Filter */}
+      {activeTab === 'content' && (
+        <>
+          <div className="admin-card">
+            <h2>Chat Messages</h2>
+            <div className="search-bar">
+              <input
+                type="text"
+                className="form-input"
+                placeholder="Search messages..."
+                value={messageSearch}
+                onChange={e => setMessageSearch(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && fetchMessages()}
+              />
+              <button className="btn btn-primary" onClick={fetchMessages}>Search</button>
+              <button className="btn btn-danger" onClick={handleClearChat}>Clear All</button>
+            </div>
+
+            <div className="message-list">
+              {messages.length === 0 ? <div className="empty">No messages</div> : (
+                messages.map(m => (
+                  <div key={m.id} className="message-item">
+                    <span className="avatar" style={{ backgroundColor: m.avatar_color }} />
+                    <div className="message-content">
+                      <div className="message-header">
+                        <span className="message-username">{m.username}</span>
+                        <span className="message-time">{formatDate(m.created_at)}</span>
+                        {m.email && <span className="message-time">({m.email})</span>}
+                      </div>
+                      <div className={`message-text ${m.is_deleted ? 'deleted' : ''}`}>
+                        {m.content}
+                      </div>
+                    </div>
+                    <div className="message-actions">
+                      <button className="btn btn-sm btn-danger" onClick={() => handleDeleteMessage(m.id)}>Delete</button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
 
-          <div className="message-list">
-            {messages.length === 0 ? <div className="empty">No messages</div> : (
-              messages.map(m => (
-                <div key={m.id} className="message-item">
-                  <span className="avatar" style={{ backgroundColor: m.avatar_color }} />
-                  <div className="message-content">
-                    <div className="message-header">
-                      <span className="message-username">{m.username}</span>
-                      <span className="message-time">{formatDate(m.created_at)}</span>
-                      {m.email && <span className="message-time">({m.email})</span>}
-                    </div>
-                    <div className={`message-text ${m.is_deleted ? 'deleted' : ''}`}>
-                      {m.content}
-                    </div>
+          <div className="admin-card">
+            <h2>Word Filter</h2>
+            <p style={{ color: '#888', marginBottom: 16 }}>Messages containing these words will be blocked.</p>
+
+            <div className="form-row">
+              <input
+                type="text"
+                className="form-input"
+                placeholder="Add word or pattern..."
+                value={newWord}
+                onChange={e => setNewWord(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleAddWord()}
+                style={{ flex: 1 }}
+              />
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#888' }}>
+                <input
+                  type="checkbox"
+                  checked={newWordRegex}
+                  onChange={e => setNewWordRegex(e.target.checked)}
+                />
+                Regex
+              </label>
+              <button className="btn btn-primary" onClick={handleAddWord}>Add</button>
+            </div>
+
+            <div className="word-list">
+              {wordFilters.map(w => (
+                <div key={w.id} className={`word-tag ${w.is_regex ? 'regex' : ''}`}>
+                  <span>{w.word}</span>
+                  {w.is_regex === 1 && <span style={{ color: '#666' }}>(regex)</span>}
+                  <button onClick={() => handleRemoveWord(w.id)}>&times;</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Games Tab - Sessions + Scores */}
+      {activeTab === 'games' && (
+        <>
+          <div className="admin-card">
+            <h2>Game Sessions</h2>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Status</label>
+                <select className="form-select" value={sessionStatus} onChange={e => setSessionStatus(e.target.value)}>
+                  <option value="playing">Active</option>
+                  <option value="completed">Completed</option>
+                  <option value="ended">Ended (timed out)</option>
+                </select>
+              </div>
+              <button className="btn btn-primary" onClick={fetchSessions}>Refresh</button>
+              <button className="btn btn-danger" onClick={handleEndAllSessions}>End All Sessions</button>
+            </div>
+
+            {sessions.length === 0 ? <div className="empty">No sessions</div> : (
+              sessions.map(s => (
+                <div key={s.id} className="session-item">
+                  <div className="session-info">
+                    <span className="session-game">{ALL_ADMIN_GAMES.find(g => g.id === s.game_id)?.title || s.game_id}</span>
+                    <span className="session-user">{s.username || 'Unknown'} - Score: {s.score}</span>
+                    <span className="session-time">Started {formatRelative(s.started_at)}</span>
                   </div>
-                  <div className="message-actions">
-                    <button className="btn btn-sm btn-danger" onClick={() => handleDeleteMessage(m.id)}>Delete</button>
-                  </div>
+                  {s.status === 'playing' && (
+                    <button className="btn btn-sm btn-danger" onClick={() => handleEndSession(s.id)}>End</button>
+                  )}
                 </div>
               ))
             )}
           </div>
-        </div>
-      )}
 
-      {/* Sessions */}
-      {activeTab === 'sessions' && (
-        <div className="admin-card">
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">Status</label>
-              <select className="form-select" value={sessionStatus} onChange={e => setSessionStatus(e.target.value)}>
-                <option value="playing">Active</option>
-                <option value="completed">Completed</option>
-                <option value="ended">Ended (timed out)</option>
-              </select>
-            </div>
-            <button className="btn btn-primary" onClick={fetchSessions}>Refresh</button>
-            <button className="btn btn-danger" onClick={handleEndAllSessions}>End All Sessions</button>
-          </div>
-
-          {sessions.length === 0 ? <div className="empty">No sessions</div> : (
-            sessions.map(s => (
-              <div key={s.id} className="session-item">
-                <div className="session-info">
-                  <span className="session-game">{playableGames.find(g => g.id === s.game_id)?.title || s.game_id}</span>
-                  <span className="session-user">{s.username || 'Unknown'} - Score: {s.score}</span>
-                  <span className="session-time">Started {formatRelative(s.started_at)}</span>
-                </div>
-                {s.status === 'playing' && (
-                  <button className="btn btn-sm btn-danger" onClick={() => handleEndSession(s.id)}>End</button>
-                )}
+          <div className="admin-card">
+            <h2>High Scores</h2>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Game</label>
+                <select
+                  className="form-select"
+                  value={selectedGame}
+                  onChange={e => setSelectedGame(e.target.value)}
+                >
+                  {ALL_ADMIN_GAMES.map(g => (
+                    <option key={g.id} value={g.id}>{g.title}</option>
+                  ))}
+                </select>
               </div>
-            ))
-          )}
-        </div>
+              <div className="form-group">
+                <label className="form-label">Wipe Scores (requires password)</label>
+                <div className="form-row">
+                  <input
+                    type="password"
+                    className="form-input"
+                    placeholder="Password"
+                    value={wipePassword}
+                    onChange={e => setWipePassword(e.target.value)}
+                    style={{ width: 150 }}
+                  />
+                  <button className="btn btn-danger" onClick={handleWipeScores}>Wipe All</button>
+                </div>
+              </div>
+            </div>
+
+            <div className="admin-table-wrap">
+              <table className="admin-tbl">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Player</th>
+                    <th>Score</th>
+                    <th>Date</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {scores.map((s, i) => (
+                    <tr key={s.id}>
+                      <td>{i + 1}</td>
+                      <td>
+                        <div className="user-cell">
+                          <span className="avatar" style={{ backgroundColor: s.avatar_color }} />
+                          <span>{s.username}</span>
+                        </div>
+                      </td>
+                      <td>{s.score.toLocaleString()}</td>
+                      <td className="muted-text">{formatDate(s.created_at)}</td>
+                      <td>
+                        <button className="btn btn-sm btn-danger" onClick={() => handleDeleteScore(s.id)}>Delete</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
       )}
 
-      {/* Settings */}
+      {/* Settings Tab */}
       {activeTab === 'settings' && (
         <>
           <div className="admin-card">
@@ -841,132 +964,6 @@ export default function Admin() {
             </div>
           </div>
         </>
-      )}
-
-      {/* Scores */}
-      {activeTab === 'scores' && (
-        <div className="admin-card">
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">Game</label>
-              <select
-                className="form-select"
-                value={selectedGame}
-                onChange={e => setSelectedGame(e.target.value)}
-              >
-                {playableGames.map(g => (
-                  <option key={g.id} value={g.id}>{g.title}</option>
-                ))}
-              </select>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Wipe Scores (requires password)</label>
-              <div className="form-row">
-                <input
-                  type="password"
-                  className="form-input"
-                  placeholder="Password"
-                  value={wipePassword}
-                  onChange={e => setWipePassword(e.target.value)}
-                  style={{ width: 150 }}
-                />
-                <button className="btn btn-danger" onClick={handleWipeScores}>Wipe All</button>
-              </div>
-            </div>
-          </div>
-
-          <div className="admin-table-wrap">
-            <table className="admin-tbl">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Player</th>
-                  <th>Score</th>
-                  <th>Date</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {scores.map((s, i) => (
-                  <tr key={s.id}>
-                    <td>{i + 1}</td>
-                    <td>
-                      <div className="user-cell">
-                        <span className="avatar" style={{ backgroundColor: s.avatar_color }} />
-                        <span>{s.username}</span>
-                      </div>
-                    </td>
-                    <td>{s.score.toLocaleString()}</td>
-                    <td className="muted-text">{formatDate(s.created_at)}</td>
-                    <td>
-                      <button className="btn btn-sm btn-danger" onClick={() => handleDeleteScore(s.id)}>Delete</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Word Filter */}
-      {activeTab === 'wordfilter' && (
-        <div className="admin-card">
-          <h2>Word Filter</h2>
-          <p style={{ color: '#888', marginBottom: 16 }}>Messages containing these words will be blocked.</p>
-
-          <div className="form-row">
-            <input
-              type="text"
-              className="form-input"
-              placeholder="Add word or pattern..."
-              value={newWord}
-              onChange={e => setNewWord(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleAddWord()}
-              style={{ flex: 1 }}
-            />
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#888' }}>
-              <input
-                type="checkbox"
-                checked={newWordRegex}
-                onChange={e => setNewWordRegex(e.target.checked)}
-              />
-              Regex
-            </label>
-            <button className="btn btn-primary" onClick={handleAddWord}>Add</button>
-          </div>
-
-          <div className="word-list">
-            {wordFilters.map(w => (
-              <div key={w.id} className={`word-tag ${w.is_regex ? 'regex' : ''}`}>
-                <span>{w.word}</span>
-                {w.is_regex === 1 && <span style={{ color: '#666' }}>(regex)</span>}
-                <button onClick={() => handleRemoveWord(w.id)}>&times;</button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Audit Log */}
-      {activeTab === 'audit' && (
-        <div className="admin-card">
-          <h2>Audit Log</h2>
-          <div style={{ maxHeight: 600, overflow: 'auto' }}>
-            {auditLogs.length === 0 ? <div className="empty">No audit logs</div> : (
-              auditLogs.map(log => (
-                <div key={log.id} className="audit-item">
-                  <span className="audit-time">{formatDate(log.created_at)}</span>
-                  <div className="audit-action">
-                    <strong>{log.admin_username}</strong> {log.action}
-                    {log.target_name && <> on <strong>{log.target_name}</strong></>}
-                    {log.details && <div className="audit-details">{log.details}</div>}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
       )}
 
       {/* Ban Modal */}

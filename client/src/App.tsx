@@ -3,7 +3,6 @@ import { useAuth } from './context/AuthContext'
 import { useDeviceType } from './hooks/useDeviceType'
 import DesktopApp from './layouts/DesktopApp'
 import MobileApp from './layouts/MobileApp'
-import Admin from './pages/Admin'
 
 function App() {
   const { isLoading, loadingProgress, loadingStatus } = useAuth()
@@ -32,7 +31,6 @@ function App() {
 
   return (
     <Routes>
-      <Route path="/admin" element={<Admin />} />
       <Route path="*" element={isMobile ? <MobileApp /> : <DesktopApp />} />
     </Routes>
   )

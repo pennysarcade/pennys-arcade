@@ -5,6 +5,7 @@ import Game from '../pages/Game'
 import Leaderboard from '../pages/Leaderboard'
 import Privacy from '../pages/Privacy'
 import About from '../pages/About'
+import Admin from '../pages/Admin'
 
 export default function DesktopApp() {
   return (
@@ -16,6 +17,7 @@ export default function DesktopApp() {
         <Route path="/leaderboard" element={<Leaderboard />} />
         <Route path="/roadmap" element={<Navigate to="/about" replace />} />
         <Route path="/privacy" element={<Privacy />} />
+        <Route path="/admin" element={<Admin />} />
       </Routes>
     </MainLayout>
   )

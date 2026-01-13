@@ -15,14 +15,10 @@
 .admin-panel {
   background: #1a1a2e;
   color: #e0e0e0;
-  min-height: 100vh;
+  min-height: 100%;
   padding: 20px;
   font-size: 14px;
   line-height: 1.5;
-  position: fixed;
-  inset: 0;
-  overflow-y: auto;
-  z-index: 9999;
 }
 
 /* Header */
