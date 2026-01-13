@@ -146,8 +146,8 @@ export const MAX_PLAYERS = 8
 export const ROUND_DURATION = 75000 // 75 seconds
 export const COUNTDOWN_DURATION = 3000 // 3 seconds
 export const TICK_RATE = 20 // 20 updates per second (50ms)
-export const MOVE_INTERVAL = 250 // Players move every 250ms (4 moves/sec)
-export const SPEED_BOOST_MOVE_INTERVAL = 166 // ~6 moves/sec with speed boost
+export const MOVE_INTERVAL = 350 // Players move every 350ms (~3 moves/sec)
+export const SPEED_BOOST_MOVE_INTERVAL = 233 // ~4.3 moves/sec with speed boost
 
 // Scoring
 export const POINTS_PER_TILE = 5
