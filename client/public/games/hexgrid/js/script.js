@@ -52,6 +52,7 @@ window.addEventListener('resize', () => {
 // Request auth from parent
 window.addEventListener('message', (event) => {
     if (event.data?.type === 'HEXGRID_AUTH') {
+        console.log('[HEXGRID] Received auth from parent');
         authToken = event.data.token;
         currentUser = event.data.user;
         connectToServer();
@@ -61,8 +62,14 @@ window.addEventListener('message', (event) => {
     }
 });
 
-// Tell parent we're ready
-window.parent.postMessage({ type: 'HEXGRID_READY', game: 'hexgrid' }, '*');
+// Tell parent we're ready - retry until we get auth
+function requestAuth() {
+    if (authToken) return; // Already got auth
+    console.log('[HEXGRID] Requesting auth from parent...');
+    window.parent.postMessage({ type: 'HEXGRID_READY', game: 'hexgrid' }, '*');
+    setTimeout(requestAuth, 500); // Retry every 500ms
+}
+requestAuth();
 
 // Connect to server
 function connectToServer() {
