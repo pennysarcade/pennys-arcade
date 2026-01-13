@@ -43,7 +43,7 @@ export const GAMES: GameConfig[] = [
     platforms: 'both',
     requiresAuth: true,
     multiplayer: true,
-    maxPlayers: 8,
+    maxPlayers: 4,
   },
   { id: '04', title: 'Game 04', description: 'Under construction...' },
   { id: '05', title: 'Game 05', description: 'Under construction...' },

@@ -15,6 +15,10 @@ export class HexRenderer {
         this.screenShake = { x: 0, y: 0, intensity: 0 };
         this.particles = [];
 
+        // Interpolation state for smooth movement
+        this.playerPositions = new Map(); // playerId -> { prev: {q,r}, current: {q,r}, lastUpdate: timestamp }
+        this.interpolationDuration = 400; // ms to interpolate between positions
+
         // Pre-calculate grid hexes
         this.gridHexes = [];
 
@@ -46,6 +50,60 @@ export class HexRenderer {
     setGridSize(size) {
         this.gridSize = size;
         this.resize();
+    }
+
+    // Update player position for interpolation
+    updatePlayerPosition(playerId, newPosition) {
+        const existing = this.playerPositions.get(playerId);
+        const now = Date.now();
+
+        if (existing) {
+            // Only update if position actually changed
+            if (existing.current.q !== newPosition.q || existing.current.r !== newPosition.r) {
+                existing.prev = { ...existing.current };
+                existing.current = { ...newPosition };
+                existing.lastUpdate = now;
+            }
+        } else {
+            // First time seeing this player
+            this.playerPositions.set(playerId, {
+                prev: { ...newPosition },
+                current: { ...newPosition },
+                lastUpdate: now
+            });
+        }
+    }
+
+    // Get interpolated position for a player
+    getInterpolatedPosition(playerId, fallbackPosition) {
+        const posData = this.playerPositions.get(playerId);
+        if (!posData) return fallbackPosition;
+
+        const now = Date.now();
+        const elapsed = now - posData.lastUpdate;
+        const t = Math.min(1, elapsed / this.interpolationDuration);
+
+        // Smooth easing function
+        const easeT = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+
+        // Convert hex positions to pixel positions and interpolate
+        const prevPixel = hexToPixel(posData.prev.q, posData.prev.r, this.hexSize, this.centerX, this.centerY);
+        const currPixel = hexToPixel(posData.current.q, posData.current.r, this.hexSize, this.centerX, this.centerY);
+
+        return {
+            x: prevPixel.x + (currPixel.x - prevPixel.x) * easeT,
+            y: prevPixel.y + (currPixel.y - prevPixel.y) * easeT
+        };
+    }
+
+    // Clean up old player positions
+    cleanupOldPositions(activePlayerIds) {
+        const activeSet = new Set(activePlayerIds);
+        for (const [id] of this.playerPositions) {
+            if (!activeSet.has(id)) {
+                this.playerPositions.delete(id);
+            }
+        }
     }
 
     // Trigger screen shake
@@ -185,7 +243,8 @@ export class HexRenderer {
 
     // Draw a player
     drawPlayer(player, isLocalPlayer = false) {
-        const pos = hexToPixel(player.position.q, player.position.r, this.hexSize, this.centerX, this.centerY);
+        // Use interpolated position for smooth movement
+        const pos = this.getInterpolatedPosition(player.id, player.position);
         const radius = this.hexSize * 0.4;
 
         // Glow effect for local player
@@ -424,6 +483,14 @@ export class HexRenderer {
     render(gameState, localPlayerId) {
         this.updateShake();
         this.updateParticles();
+
+        // Update interpolation state for all players
+        const activeIds = [];
+        for (const player of gameState.players) {
+            activeIds.push(player.id);
+            this.updatePlayerPosition(player.id, player.position);
+        }
+        this.cleanupOldPositions(activeIds);
 
         this.ctx.save();
         this.ctx.translate(this.screenShake.x, this.screenShake.y);

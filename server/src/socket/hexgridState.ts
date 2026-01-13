@@ -142,7 +142,7 @@ export interface GameOverData {
 
 // Constants
 export const HEX_GRID_SIZE = 7 // Grid radius (creates ~127 hexes)
-export const MAX_PLAYERS = 8
+export const MAX_PLAYERS = 4
 export const ROUND_DURATION = 75000 // 75 seconds
 export const COUNTDOWN_DURATION = 3000 // 3 seconds
 export const TICK_RATE = 30 // 30 updates per second (~33ms) for smoother rendering
@@ -167,17 +167,13 @@ export const GEM_MAX_VALUE = 200
 export const CROWN_VALUE = 500
 export const CROWN_SPAWN_CHANCE = 0.1 // 10% chance when spawning powerup
 
-// Starting positions (8 positions around the edge of the hex grid)
+// Starting positions (4 positions around the edge of the hex grid)
 export function getStartingPositions(gridSize: number): HexCoord[] {
   return [
     { q: -gridSize, r: 0 }, // West
     { q: gridSize, r: 0 }, // East
     { q: 0, r: -gridSize }, // North
     { q: 0, r: gridSize }, // South
-    { q: -gridSize, r: gridSize }, // Southwest
-    { q: gridSize, r: -gridSize }, // Northeast
-    { q: Math.floor(-gridSize / 2), r: -Math.floor(gridSize / 2) }, // Northwest-ish
-    { q: Math.floor(gridSize / 2), r: Math.floor(gridSize / 2) }, // Southeast-ish
   ]
 }
 
@@ -187,10 +183,6 @@ export const AI_COLORS = [
   '#4ECDC4', // Teal
   '#FFE66D', // Yellow
   '#95E1D3', // Mint
-  '#F38181', // Coral
-  '#AA96DA', // Lavender
-  '#FCBAD3', // Pink
-  '#A8D8EA', // Sky blue
 ]
 
 export const AI_NAMES = [
@@ -198,10 +190,6 @@ export const AI_NAMES = [
   'Bot Beta',
   'Bot Gamma',
   'Bot Delta',
-  'Bot Epsilon',
-  'Bot Zeta',
-  'Bot Eta',
-  'Bot Theta',
 ]
 
 // Utility functions
