@@ -31,28 +31,52 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.75rem 1rem;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
   background: var(--bg-card);
   border-bottom: 2px solid var(--border-color);
   position: sticky;
   top: 0;
   z-index: 100;
-  padding-top: calc(0.75rem + env(safe-area-inset-top, 0));
-}
-
-.mobile-header-spacer {
-  width: 44px;
+  padding-top: calc(0.5rem + env(safe-area-inset-top, 0));
 }
 
 .mobile-header-logo {
   display: flex;
   align-items: center;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .mobile-logo-img {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
+}
+
+.mobile-header-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex: 1;
+  justify-content: center;
+}
+
+.mobile-header-nav-item {
+  background: none;
+  border: none;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-family: var(--font-heading);
+  font-size: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  transition: color 0.2s ease;
+}
+
+.mobile-header-nav-item.active {
+  color: var(--neon-cyan);
+  text-shadow: 0 0 8px var(--neon-cyan);
 }
 
 .mobile-menu-btn {
@@ -63,66 +87,22 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 
 .mobile-menu-icon {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  width: 24px;
+  gap: 4px;
+  width: 20px;
 }
 
 .mobile-menu-icon span {
   display: block;
-  height: 3px;
+  height: 2px;
   background: var(--neon-cyan);
   border-radius: 2px;
   transition: all 0.2s ease;
-}
-
-/* ========================================
-   MOBILE BOTTOM NAV
-   ======================================== */
-
-.mobile-nav {
-  display: flex;
-  justify-content: space-around;
-  align-items: center;
-  background: var(--bg-card);
-  border-top: 2px solid var(--border-color);
-  padding: 0.5rem 0;
-  padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0));
-  position: sticky;
-  bottom: 0;
-  z-index: 100;
-}
-
-.mobile-nav-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.25rem;
-  background: none;
-  border: none;
-  padding: 0.5rem 1rem;
-  cursor: pointer;
-  color: var(--text-secondary);
-  transition: color 0.2s ease;
-}
-
-.mobile-nav-item.active {
-  color: var(--neon-cyan);
-}
-
-.mobile-nav-icon {
-  font-size: 1.5rem;
-}
-
-.mobile-nav-label {
-  font-family: var(--font-heading);
-  font-size: 0.5rem;
-  text-transform: uppercase;
-  letter-spacing: 1px;
 }
 
 /* ========================================
@@ -275,29 +255,17 @@
 }
 
 /* ========================================
-   MOBILE GAME ROW
+   MOBILE GAME LIST
    ======================================== */
 
 .mobile-game-row {
   display: flex;
+  flex-direction: column;
   gap: 1rem;
-  overflow-x: auto;
-  scroll-snap-type: x mandatory;
-  -webkit-overflow-scrolling: touch;
-  padding: 0.5rem 0;
-  margin: 0 -1rem;
-  padding-left: 1rem;
-  padding-right: 1rem;
-}
-
-.mobile-game-row::-webkit-scrollbar {
-  display: none;
 }
 
 .mobile-game-card {
-  flex: 0 0 75vw;
-  max-width: 300px;
-  scroll-snap-align: start;
+  display: block;
   background: var(--bg-card);
   border: 2px solid var(--border-color);
   text-decoration: none;

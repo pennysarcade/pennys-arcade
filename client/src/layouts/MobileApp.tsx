@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import MobileHeader from '../mobile/components/MobileHeader'
-import MobileNav from '../mobile/components/MobileNav'
 import BurgerMenu from '../mobile/components/BurgerMenu'
 import MobileHome from '../mobile/pages/MobileHome'
 import MobileChat from '../mobile/pages/MobileChat'
@@ -31,8 +30,6 @@ export default function MobileApp() {
           <Route path="/privacy" element={<Privacy />} />
         </Routes>
       </main>
-
-      <MobileNav />
 
       <BurgerMenu isOpen={menuOpen} onClose={() => setMenuOpen(false)} />
     </div>
