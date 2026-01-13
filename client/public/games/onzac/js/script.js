@@ -484,7 +484,7 @@ welcomeScreen.id = 'onzac-welcome';
 // Different instructions for mobile vs desktop
 const instructionsText = isMobileMode
   ? 'Protect the survivors. Tap weapon button to switch.'
-  : 'Protect the survivors. Space to switch weapons.<br>Every 20k points: Black Hole [B]';
+  : 'Protect the survivors. Space to switch weapons.<br>Every 5,000 points: Black Hole [B]';
 welcomeScreen.innerHTML = `
   <h1>ONZAC</h1>
   <div class="instructions">${instructionsText}</div>
@@ -2525,7 +2525,7 @@ document.addEventListener('keydown', (e) => {
   }
 
   // B key to deploy black hole
-  if ((e.code === 'KeyB') && !gameState.gameOver && gameState.blackHolesAvailable > 0) {
+  if ((e.code === 'KeyB') && !gameState.gameOver && !paused && gameState.blackHolesAvailable > 0) {
     e.preventDefault();
     deployBlackHole();
   }
