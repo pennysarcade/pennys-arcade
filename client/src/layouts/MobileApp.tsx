@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import MobileHeader from '../mobile/components/MobileHeader'
 import BurgerMenu from '../mobile/components/BurgerMenu'
-import MobileTicker from '../mobile/components/MobileTicker'
 import MobileHome from '../mobile/pages/MobileHome'
 import MobileChat from '../mobile/pages/MobileChat'
 import MobileGame from '../mobile/pages/MobileGame'
@@ -32,7 +31,6 @@ export default function MobileApp() {
         </Routes>
       </main>
 
-      <MobileTicker />
       <BurgerMenu isOpen={menuOpen} onClose={() => setMenuOpen(false)} />
     </div>
   )

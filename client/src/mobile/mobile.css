@@ -20,8 +20,7 @@
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
-  /* Account for ticker bar at bottom */
-  padding-bottom: calc(40px + env(safe-area-inset-bottom, 0));
+  padding-bottom: env(safe-area-inset-bottom, 0);
 }
 
 /* ========================================
@@ -944,30 +943,28 @@
 }
 
 /* ========================================
-   MOBILE TICKER
+   MOBILE TICKER (Game page only)
    ======================================== */
 
 .mobile-ticker {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 32px;
+  height: 28px;
   background: var(--bg-card);
   border-top: 1px solid var(--border-color);
   display: flex;
   align-items: center;
-  z-index: 90;
+  flex-shrink: 0;
   padding-bottom: env(safe-area-inset-bottom, 0);
 }
 
 .mobile-ticker .typewriter-ticker {
   padding: 0 0.75rem;
+  width: 100%;
+  height: 100%;
 }
 
 .mobile-ticker .typewriter-text {
   font-family: var(--font-heading);
-  font-size: 0.55rem;
+  font-size: 0.5rem;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   white-space: nowrap;

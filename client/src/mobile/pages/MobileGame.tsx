@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { useSocket } from '../../context/SocketContext'
 import { GAMES, type GameConfig } from '../../components/Games/ArcadeGrid'
+import MobileTicker from '../components/MobileTicker'
 
 interface ExtendedGameConfig extends GameConfig {
   path?: string
@@ -263,15 +264,18 @@ export default function MobileGame() {
       </div>
 
       {isPlayable ? (
-        <div className="mobile-game-container">
-          <iframe
-            ref={iframeRef}
-            src={`${game.path}?mobile=true`}
-            className="mobile-game-iframe"
-            title={game.title}
-            allow="autoplay"
-          />
-        </div>
+        <>
+          <div className="mobile-game-container">
+            <iframe
+              ref={iframeRef}
+              src={`${game.path}?mobile=true`}
+              className="mobile-game-iframe"
+              title={game.title}
+              allow="autoplay"
+            />
+          </div>
+          <MobileTicker />
+        </>
       ) : (
         <div className="mobile-game-placeholder">
           <h2>Under Construction</h2>
