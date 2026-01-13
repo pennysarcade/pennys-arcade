@@ -256,9 +256,11 @@ export default function MobileGame() {
       }
       // Handle HEXGRID auth request
       if (event.data?.type === 'HEXGRID_READY' && event.data?.game === 'hexgrid' && id === 'hexgrid') {
+        const serverUrl = import.meta.env.DEV ? 'http://localhost:3001' : window.location.origin
         iframeRef.current?.contentWindow?.postMessage({
           type: 'HEXGRID_AUTH',
           token: token,
+          serverUrl: serverUrl,
           user: {
             id: user?.id,
             username: user?.username,

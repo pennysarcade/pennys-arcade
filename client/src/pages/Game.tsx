@@ -336,9 +336,13 @@ export default function Game() {
       // Handle HEXGRID auth request
       if (event.data?.type === 'HEXGRID_READY' && event.data?.game === 'hexgrid' && id === 'hexgrid') {
         console.log('[HEXGRID] Auth request received, sending credentials')
+        // In development, Socket.io server is on port 3001
+        // In production, it's the same origin
+        const serverUrl = import.meta.env.DEV ? 'http://localhost:3001' : window.location.origin
         iframeRef.current?.contentWindow?.postMessage({
           type: 'HEXGRID_AUTH',
           token: token,
+          serverUrl: serverUrl,
           user: {
             id: user?.id,
             username: user?.username,

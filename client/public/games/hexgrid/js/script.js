@@ -29,6 +29,7 @@ const yourResultEl = document.getElementById('yourResult');
 // Game state
 let socket = null;
 let authToken = null;
+let serverUrl = null;
 let currentUser = null;
 let localPlayerId = null;
 let isSpectator = false;
@@ -54,6 +55,7 @@ window.addEventListener('message', (event) => {
     if (event.data?.type === 'HEXGRID_AUTH') {
         console.log('[HEXGRID] Received auth from parent');
         authToken = event.data.token;
+        serverUrl = event.data.serverUrl;
         currentUser = event.data.user;
         connectToServer();
     }
@@ -78,8 +80,10 @@ function connectToServer() {
         return;
     }
 
+    console.log('[HEXGRID] Connecting to server:', serverUrl);
+
     // Connect to Socket.io
-    socket = io({
+    socket = io(serverUrl, {
         auth: { token: authToken }
     });
 
