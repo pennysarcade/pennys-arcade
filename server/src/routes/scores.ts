@@ -99,15 +99,16 @@ router.get('/sessions/me', authenticateToken, async (req, res) => {
 router.post('/session/start/:gameId', authenticateToken, async (req, res) => {
   try {
     const { gameId } = req.params
+    const { platform } = req.body  // 'desktop' or 'mobile'
     const userId = req.user!.userId
 
-    console.log(`[SESSION] Starting game: ${gameId} for user ${userId}`)
+    console.log(`[SESSION] Starting game: ${gameId} for user ${userId} on ${platform || 'desktop'}`)
 
     const result = await queryOne<{ id: number }>(`
-      INSERT INTO game_sessions (user_id, game_id, status)
-      VALUES ($1, $2, 'playing')
+      INSERT INTO game_sessions (user_id, game_id, status, platform)
+      VALUES ($1, $2, 'playing', $3)
       RETURNING id
-    `, [userId, gameId])
+    `, [userId, gameId, platform || 'desktop'])
 
     console.log(`[SESSION] Created session ${result!.id}`)
 
@@ -198,11 +199,12 @@ router.post('/session/end/:sessionId', authenticateToken, async (req, res) => {
       )
 
       if (user) {
+        // Use platform from the session
         const hsResult = await queryOne<{ id: number }>(`
-          INSERT INTO high_scores (user_id, username, avatar_color, game_id, score, stats)
-          VALUES ($1, $2, $3, $4, $5, $6)
+          INSERT INTO high_scores (user_id, username, avatar_color, game_id, score, stats, platform)
+          VALUES ($1, $2, $3, $4, $5, $6, $7)
           RETURNING id
-        `, [userId, user.username, user.avatar_color, session.game_id, score, stats ? JSON.stringify(stats) : null])
+        `, [userId, user.username, user.avatar_color, session.game_id, score, stats ? JSON.stringify(stats) : null, session.platform || 'desktop'])
 
         console.log(`[SESSION] High score ${hsResult!.id} saved for session ${sessionId}`)
 
@@ -461,7 +463,7 @@ router.get('/:gameId', async (req, res) => {
     const scores = await query<HighScore>(`
       SELECT h.id, COALESCE(u.username, h.username) as username,
              COALESCE(u.avatar_color, h.avatar_color) as avatar_color,
-             h.game_id, h.score, h.stats, h.created_at
+             h.game_id, h.score, h.stats, h.platform, h.created_at
       FROM high_scores h
       LEFT JOIN users u ON h.user_id = u.id
       WHERE h.game_id = $1
@@ -480,10 +482,10 @@ router.get('/:gameId', async (req, res) => {
 router.post('/:gameId', authenticateToken, async (req, res) => {
   try {
     const { gameId } = req.params
-    const { score, stats, sessionId } = req.body
+    const { score, stats, sessionId, platform } = req.body  // platform: 'desktop' or 'mobile'
     const userId = req.user!.userId
 
-    console.log(`[SCORE] Direct submission: game=${gameId}, userId=${userId}, score=${score}, sessionId=${sessionId || 'none'}`)
+    console.log(`[SCORE] Direct submission: game=${gameId}, userId=${userId}, score=${score}, sessionId=${sessionId || 'none'}, platform=${platform || 'desktop'}`)
 
     if (typeof score !== 'number' || score < 0) {
       res.status(400).json({ message: 'Invalid score' })
@@ -509,9 +511,9 @@ router.post('/:gameId', authenticateToken, async (req, res) => {
     } else {
       // Create a completed session record for tracking
       await execute(`
-        INSERT INTO game_sessions (user_id, game_id, score, status, stats, ended_at)
-        VALUES ($1, $2, $3, 'completed', $4, CURRENT_TIMESTAMP)
-      `, [userId, gameId, score, stats ? JSON.stringify(stats) : null])
+        INSERT INTO game_sessions (user_id, game_id, score, status, stats, platform, ended_at)
+        VALUES ($1, $2, $3, 'completed', $4, $5, CURRENT_TIMESTAMP)
+      `, [userId, gameId, score, stats ? JSON.stringify(stats) : null, platform || 'desktop'])
       console.log(`[SCORE] Created completed session record`)
     }
 
@@ -528,10 +530,10 @@ router.post('/:gameId', authenticateToken, async (req, res) => {
 
     // Insert the high score
     const result = await queryOne<{ id: number }>(`
-      INSERT INTO high_scores (user_id, username, avatar_color, game_id, score, stats)
-      VALUES ($1, $2, $3, $4, $5, $6)
+      INSERT INTO high_scores (user_id, username, avatar_color, game_id, score, stats, platform)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING id
-    `, [userId, user.username, user.avatar_color, gameId, score, stats ? JSON.stringify(stats) : null])
+    `, [userId, user.username, user.avatar_color, gameId, score, stats ? JSON.stringify(stats) : null, platform || 'desktop'])
 
     // Get the rank of this score
     const rank = await queryOne<{ rank: string }>(

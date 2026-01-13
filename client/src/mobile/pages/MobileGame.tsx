@@ -2,34 +2,24 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { useSocket } from '../../context/SocketContext'
-import { GAMES } from '../../components/Games/ArcadeGrid'
+import { GAMES, type GameConfig } from '../../components/Games/ArcadeGrid'
 
-interface GameConfig {
-  title: string
-  description: string
+interface ExtendedGameConfig extends GameConfig {
   path?: string
 }
 
-const GAME_CONFIGS: Record<string, GameConfig> = {
-  'tessles': {
-    title: 'Tessles',
-    description: 'Dodge, dash, survive!',
-    path: '/games/tessles/index.html'
-  },
-  'onzac': {
-    title: 'ONZAC',
-    description: 'Oh no, zombies are coming!',
-    path: '/games/onzac/index.html'
-  },
+// Game paths for playable games
+const GAME_PATHS: Record<string, string> = {
+  'tessles': '/games/tessles/index.html',
+  'onzac': '/games/onzac/index.html',
 }
 
-// Add other games from GAMES array
+// Build game configs from GAMES array
+const GAME_CONFIGS: Record<string, ExtendedGameConfig> = {}
 GAMES.forEach(game => {
-  if (!GAME_CONFIGS[game.id]) {
-    GAME_CONFIGS[game.id] = {
-      title: game.title,
-      description: game.description
-    }
+  GAME_CONFIGS[game.id] = {
+    ...game,
+    path: GAME_PATHS[game.id]
   }
 })
 
@@ -65,7 +55,8 @@ export default function MobileGame() {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
-        }
+        },
+        body: JSON.stringify({ platform: 'mobile' })
       })
 
       if (response.ok) {
@@ -275,7 +266,7 @@ export default function MobileGame() {
         <div className="mobile-game-container">
           <iframe
             ref={iframeRef}
-            src={game.path}
+            src={`${game.path}?mobile=true`}
             className="mobile-game-iframe"
             title={game.title}
             allow="autoplay"

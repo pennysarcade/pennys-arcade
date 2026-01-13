@@ -2,8 +2,9 @@ import { Link } from 'react-router-dom'
 import { GAMES } from '../../components/Games/ArcadeGrid'
 
 export default function MobileGameRow() {
-  // Sort games: active games (with banners) first, then placeholders
-  const sortedGames = [...GAMES].sort((a, b) => {
+  // Filter out desktop-only games, then sort: active games (with banners) first
+  const mobileGames = GAMES.filter(game => game.platforms !== 'desktop')
+  const sortedGames = [...mobileGames].sort((a, b) => {
     const aActive = !!a.banner
     const bActive = !!b.banner
     if (aActive && !bActive) return -1

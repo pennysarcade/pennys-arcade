@@ -9,6 +9,7 @@ interface HighScore {
   avatar_color: string
   game_id: string
   score: number
+  platform?: string
   created_at: string
 }
 
@@ -138,6 +139,9 @@ export default function Leaderboard() {
                           style={{ backgroundColor: score.avatar_color }}
                         />
                         {score.username}
+                        {score.platform === 'mobile' && (
+                          <span className="platform-badge mobile" title="Played on mobile">M</span>
+                        )}
                       </span>
                     </td>
                     <td className="leaderboard-score">

@@ -1,8 +1,20 @@
 import GameCard from './GameCard'
 
-export const GAMES = [
-  { id: 'tessles', title: 'Tessles', description: 'Dodge, dash, survive!', banner: '/games/tessles/banner.jpg', video: '/games/tessles/banner.webm' },
-  { id: 'onzac', title: 'ONZAC', description: 'Oh no, zombies are coming!', banner: '/games/onzac/banner.jpg', video: '/games/onzac/banner.webm' },
+// Platform support types: 'both' | 'desktop' | 'mobile'
+export type PlatformSupport = 'both' | 'desktop' | 'mobile'
+
+export interface GameConfig {
+  id: string
+  title: string
+  description: string
+  banner?: string
+  video?: string
+  platforms?: PlatformSupport  // defaults to 'both' if not specified
+}
+
+export const GAMES: GameConfig[] = [
+  { id: 'tessles', title: 'Tessles', description: 'Dodge, dash, survive!', banner: '/games/tessles/banner.jpg', video: '/games/tessles/banner.webm', platforms: 'both' },
+  { id: 'onzac', title: 'ONZAC', description: 'Oh no, zombies are coming!', banner: '/games/onzac/banner.jpg', video: '/games/onzac/banner.webm', platforms: 'both' },
   { id: '03', title: 'Game 03', description: 'Under construction...' },
   { id: '04', title: 'Game 04', description: 'Under construction...' },
   { id: '05', title: 'Game 05', description: 'Under construction...' },
@@ -24,9 +36,12 @@ export const GAMES = [
 ]
 
 export default function ArcadeGrid() {
+  // Filter out mobile-only games for desktop view
+  const desktopGames = GAMES.filter(game => game.platforms !== 'mobile')
+
   return (
     <div className="arcade-grid">
-      {GAMES.map((game) => (
+      {desktopGames.map((game) => (
         <GameCard
           key={game.id}
           id={game.id}

@@ -186,6 +186,11 @@ export async function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_high_scores_game ON high_scores(game_id, score DESC)
   `)
 
+  // Add platform column to high_scores (migration) - 'desktop' or 'mobile'
+  try {
+    await pool.query(`ALTER TABLE high_scores ADD COLUMN platform TEXT DEFAULT 'desktop'`)
+  } catch { /* column exists */ }
+
   // Create game_sessions table for tracking all plays
   await pool.query(`
     CREATE TABLE IF NOT EXISTS game_sessions (
@@ -204,6 +209,11 @@ export async function initDatabase() {
   await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_game_sessions_user ON game_sessions(user_id, game_id)
   `)
+
+  // Add platform column to game_sessions (migration)
+  try {
+    await pool.query(`ALTER TABLE game_sessions ADD COLUMN platform TEXT DEFAULT 'desktop'`)
+  } catch { /* column exists */ }
 
   // Create audit_log table for tracking admin actions
   await pool.query(`
@@ -343,6 +353,7 @@ export interface HighScore {
   game_id: string
   score: number
   stats: string | null
+  platform: string
   created_at: string
 }
 
@@ -353,6 +364,7 @@ export interface GameSession {
   score: number
   status: string
   stats: string | null
+  platform: string
   started_at: string
   ended_at: string | null
 }

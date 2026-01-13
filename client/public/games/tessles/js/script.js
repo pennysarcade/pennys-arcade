@@ -2,6 +2,9 @@ const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 let gameStarted = false;
 
+// Mobile mode detection - check if loaded from mobile site via query parameter
+const isMobileMode = new URLSearchParams(window.location.search).get('mobile') === 'true';
+
 // Cached DOM elements for performance (avoid getElementById in game loop)
 const domElements = {
     timer: document.getElementById('timer'),
@@ -1587,7 +1590,8 @@ function init() {
     document.getElementById("timer").style.display = "block";
     document.getElementById("scoreDisplay").style.display = "block";
     document.getElementById("comboDisplay").style.display = "none";
-    document.getElementById("focusMeter").style.display = "block";
+    // Hide focus bar on mobile since it doesn't function on touch devices
+    document.getElementById("focusMeter").style.display = isMobileMode ? "none" : "block";
     document.getElementById("powerUpIndicator").style.display = "block";
     document.getElementById("copyright").style.display = "none";
 
@@ -1718,11 +1722,14 @@ function gameLoop() {
 
     updateWave();
 
-    const maxCircles = elapsedSeconds >= 30 ? 150 : 100;
+    // Reduce max circles and spawn rate by 25% on mobile
+    const mobileMultiplier = isMobileMode ? 0.75 : 1;
+    const maxCircles = Math.floor((elapsedSeconds >= 30 ? 150 : 100) * mobileMultiplier);
     if (circles.length < maxCircles) {
         if (spawnTimer <= 0) {
             const spawnCycle = Math.floor(elapsedSeconds / 20);
-            const numberOfCirclesToSpawn = elapsedSeconds === 0 ? 100 : 30;
+            const baseSpawn = elapsedSeconds === 0 ? 100 : 30;
+            const numberOfCirclesToSpawn = Math.floor(baseSpawn * mobileMultiplier);
 
             for (let i = 0; i < numberOfCirclesToSpawn; i++) {
                 circles.push(spawnCircle(spawnCycle, elapsedSeconds));
@@ -1730,7 +1737,9 @@ function gameLoop() {
             spawnTimer = 15 * 60;
         }
 
-        if (elapsedSeconds >= 30 && spawnTimer % 4 == 0) {
+        // Continuous spawn - reduce frequency on mobile (every 5 frames instead of 4)
+        const spawnFrequency = isMobileMode ? 5 : 4;
+        if (elapsedSeconds >= 30 && spawnTimer % spawnFrequency == 0) {
             circles.push(spawnCircle(Math.floor(elapsedSeconds / 20), elapsedSeconds));
         }
     }

@@ -2157,6 +2157,25 @@ body.resizing * {
   flex-shrink: 0;
 }
 
+.platform-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-left: 0.5rem;
+  font-size: 0.6rem;
+  font-weight: bold;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.platform-badge.mobile {
+  background: var(--neon-magenta);
+  color: var(--dark-bg);
+  box-shadow: 0 0 5px var(--neon-magenta);
+}
+
 .leaderboard-score {
   text-align: right;
   font-family: var(--font-heading);

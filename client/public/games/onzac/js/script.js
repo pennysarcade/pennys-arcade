@@ -5,6 +5,9 @@
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
+// Mobile mode detection - check if loaded from mobile site via query parameter
+const isMobileMode = new URLSearchParams(window.location.search).get('mobile') === 'true';
+
 // ============================================
 // CONFIGURATION
 // ============================================
@@ -366,9 +369,13 @@ let gameStarted = false;
 
 const welcomeScreen = document.createElement('div');
 welcomeScreen.id = 'onzac-welcome';
+// Different instructions for mobile vs desktop
+const instructionsText = isMobileMode
+  ? 'Protect the survivors. Tap weapon button to switch.'
+  : 'Protect the survivors. Space to switch weapons.<br>Every 20k points: Black Hole [B]';
 welcomeScreen.innerHTML = `
   <h1>ONZAC</h1>
-  <div class="instructions">Protect the survivors. Space to switch weapons.<br>Every 20k points: Black Hole [B]</div>
+  <div class="instructions">${instructionsText}</div>
   <div id="onzac-highscore" class="highscore">HIGH SCORE: 0</div>
   <button id="onzac-start">Start</button>
 `;
@@ -381,6 +388,56 @@ function hideWelcomeScreen() {
 function showWelcomeScreen() {
   welcomeScreen.style.display = 'flex';
   updateHighScoreDisplay();
+}
+
+// ============================================
+// MOBILE WEAPON SWITCH BUTTON
+// ============================================
+let mobileWeaponBtn = null;
+if (isMobileMode) {
+  mobileWeaponBtn = document.createElement('button');
+  mobileWeaponBtn.id = 'mobile-weapon-btn';
+  mobileWeaponBtn.innerHTML = 'BALL';
+  mobileWeaponBtn.style.cssText = `
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    background: rgba(0, 255, 255, 0.3);
+    border: 3px solid #00ffff;
+    color: #00ffff;
+    font-family: monospace;
+    font-size: 12px;
+    font-weight: bold;
+    z-index: 1000;
+    touch-action: manipulation;
+    display: none;
+  `;
+  document.body.appendChild(mobileWeaponBtn);
+
+  mobileWeaponBtn.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    if (!gameState.gameOver && gameStarted) {
+      switchWeapon();
+      // Update button text and color based on current weapon
+      const weaponNames = { ball: 'BALL', flame: 'FLAME', lightning: 'BOLT' };
+      const weaponColors = { ball: '#00ffff', flame: '#ff4400', lightning: '#ffff00' };
+      mobileWeaponBtn.innerHTML = weaponNames[gameState.currentWeapon];
+      mobileWeaponBtn.style.borderColor = weaponColors[gameState.currentWeapon];
+      mobileWeaponBtn.style.color = weaponColors[gameState.currentWeapon];
+      mobileWeaponBtn.style.background = weaponColors[gameState.currentWeapon] + '33';
+    }
+  });
+}
+
+function showMobileWeaponBtn() {
+  if (mobileWeaponBtn) mobileWeaponBtn.style.display = 'block';
+}
+
+function hideMobileWeaponBtn() {
+  if (mobileWeaponBtn) mobileWeaponBtn.style.display = 'none';
 }
 
 // ============================================
@@ -1612,7 +1669,9 @@ function spawnZombie() {
     { x: -size - spawnDistance, y: canvas.height / 2 },
   ];
 
-  const zombieCount = 3 + Math.floor(difficulty * 3);
+  // Reduce zombie count by 25% on mobile
+  const baseZombieCount = 3 + Math.floor(difficulty * 3);
+  const zombieCount = isMobileMode ? Math.max(1, Math.floor(baseZombieCount * 0.75)) : baseZombieCount;
 
   for (let i = 0; i < zombieCount; i++) {
     const speed = Math.random() * (speeds.max - speeds.min) + speeds.min;
@@ -1642,19 +1701,36 @@ function spawnPowerUp(x, y) {
 function checkBlackHoleReward() {
   const threshold = Math.floor(gameState.score / CONFIG.blackHolePointsRequired);
   if (threshold > gameState.lastBlackHoleScoreThreshold) {
-    gameState.blackHolesAvailable++;
     gameState.lastBlackHoleScoreThreshold = threshold;
-    AudioSystem.play('blackholeReady');
-    addFloatingText(canvas.width / 2, canvas.height / 2, 'BLACK HOLE READY! [B]', '#8800FF', 18);
 
-    // Announce to the arcade ticker
-    if (window.parent !== window) {
-      window.parent.postMessage({
-        type: 'TICKER_MESSAGE',
-        game: 'onzac',
-        message: `BLACK HOLE READY! Press [B] to deploy!`,
-        level: 'celebration'
-      }, '*');
+    // On mobile, auto-deploy black hole immediately
+    if (isMobileMode) {
+      spawnBlackHole();
+      AudioSystem.play('blackhole');
+      addFloatingText(canvas.width / 2, canvas.height / 2, 'BLACK HOLE DEPLOYED!', '#8800FF', 18);
+
+      if (window.parent !== window) {
+        window.parent.postMessage({
+          type: 'TICKER_MESSAGE',
+          game: 'onzac',
+          message: 'BLACK HOLE AUTO-DEPLOYED!',
+          level: 'celebration'
+        }, '*');
+      }
+    } else {
+      // Desktop: require manual deployment with [B] key
+      gameState.blackHolesAvailable++;
+      AudioSystem.play('blackholeReady');
+      addFloatingText(canvas.width / 2, canvas.height / 2, 'BLACK HOLE READY! [B]', '#8800FF', 18);
+
+      if (window.parent !== window) {
+        window.parent.postMessage({
+          type: 'TICKER_MESSAGE',
+          game: 'onzac',
+          message: `BLACK HOLE READY! Press [B] to deploy!`,
+          level: 'celebration'
+        }, '*');
+      }
     }
   }
 }
@@ -2175,6 +2251,15 @@ function resetGame() {
 
   turret = new Turret();
 
+  // Reset and show mobile weapon button
+  showMobileWeaponBtn();
+  if (mobileWeaponBtn) {
+    mobileWeaponBtn.innerHTML = 'BALL';
+    mobileWeaponBtn.style.borderColor = '#00ffff';
+    mobileWeaponBtn.style.color = '#00ffff';
+    mobileWeaponBtn.style.background = 'rgba(0, 255, 255, 0.3)';
+  }
+
   spawnUninfected(CONFIG.uninfectedAmount);
 
   // Notify parent that a new game is starting
@@ -2191,6 +2276,7 @@ function update() {
     gameState.gameOver = true;
     gameState.gameOverTime = Date.now();
     AudioSystem.play('gameover');
+    hideMobileWeaponBtn();
     // Send score immediately when game ends
     sendGameOver();
     return;
@@ -2385,6 +2471,14 @@ function gameLoop() {
 function initGame() {
   gameStarted = true;
   hideWelcomeScreen();
+  showMobileWeaponBtn();
+  // Reset mobile weapon button to initial state
+  if (mobileWeaponBtn) {
+    mobileWeaponBtn.innerHTML = 'BALL';
+    mobileWeaponBtn.style.borderColor = '#00ffff';
+    mobileWeaponBtn.style.color = '#00ffff';
+    mobileWeaponBtn.style.background = 'rgba(0, 255, 255, 0.3)';
+  }
   spawnUninfected(CONFIG.uninfectedAmount);
   sendGameStart();
 }
