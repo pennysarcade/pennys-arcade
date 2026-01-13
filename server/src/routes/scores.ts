@@ -14,8 +14,10 @@ const HIGH_SCORE_ANNOUNCEMENT_COOLDOWN = 10 * 60 * 1000 // 10 minutes
 const GAME_NAMES: Record<string, string> = {
   'onzac': 'ONZAC',
   'tessles': 'Tessles',
-  'hexgrid': 'HEXGRID',
 }
+
+// Games excluded from leaderboard (offline/deprecated)
+const EXCLUDED_GAMES = ['hexgrid']
 
 function canAnnounceHighScore(gameId: string): boolean {
   const lastTime = lastHighScoreAnnouncement.get(gameId) || 0
@@ -34,6 +36,7 @@ function markHighScoreAnnounced(gameId: string): void {
 router.get('/', async (_req, res) => {
   try {
     // Get top score for each game, using current username from users table
+    // Excludes offline/deprecated games
     const scores = await query<HighScore>(`
       SELECT h1.id, COALESCE(u.username, h1.username) as username,
              COALESCE(u.avatar_color, h1.avatar_color) as avatar_color,
@@ -44,10 +47,11 @@ router.get('/', async (_req, res) => {
       INNER JOIN (
         SELECT game_id, MAX(score) as max_score
         FROM high_scores
+        WHERE game_id NOT IN (${EXCLUDED_GAMES.map((_, i) => `$${i + 1}`).join(', ')})
         GROUP BY game_id
       ) h2 ON h1.game_id = h2.game_id AND h1.score = h2.max_score
       ORDER BY h1.score DESC
-    `)
+    `, EXCLUDED_GAMES)
 
     res.json({ scores })
   } catch (error) {

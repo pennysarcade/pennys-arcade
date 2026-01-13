@@ -773,6 +773,321 @@ class ScorePopup {
 let scorePopups = [];
 
 // ============================================
+// SYSTEM MESSAGES - Commentary on gameplay events
+// ============================================
+const SystemMessages = {
+    lastMessageTimes: {},
+    MESSAGE_COOLDOWN: 60000, // 60 seconds between same message types
+
+    // Session stats for tracking interesting events
+    stats: {
+        powerUpsCollected: {},
+        dashKills: 0,
+        furyKills: 0,
+        shieldHits: 0,
+        bombKills: 0,
+        mineKills: 0,
+        closeCallCount: 0,
+        timeSinceLastPowerUp: 0,
+        lastPowerUpTime: 0,
+        peakEnemyCount: 0,
+        bossesDefeated: 0,
+        dangerZoneTime: 0,
+        splitterSpawns: 0,
+        ghostDodges: 0,
+        perfectWaves: 0,
+        lastWaveHitsTaken: 0,
+        wavesWithoutHit: 0,
+        totalDashes: 0,
+        dashesWithNoEnemiesNearby: 0,
+        playerIdleFrames: 0,
+        lastPlayerX: 0,
+        lastPlayerY: 0,
+    },
+
+    reset() {
+        this.lastMessageTimes = {};
+        this.stats = {
+            powerUpsCollected: {},
+            dashKills: 0,
+            furyKills: 0,
+            shieldHits: 0,
+            bombKills: 0,
+            mineKills: 0,
+            closeCallCount: 0,
+            timeSinceLastPowerUp: 0,
+            lastPowerUpTime: Date.now(),
+            peakEnemyCount: 0,
+            bossesDefeated: 0,
+            dangerZoneTime: 0,
+            splitterSpawns: 0,
+            ghostDodges: 0,
+            perfectWaves: 0,
+            lastWaveHitsTaken: 0,
+            wavesWithoutHit: 0,
+            totalDashes: 0,
+            dashesWithNoEnemiesNearby: 0,
+            playerIdleFrames: 0,
+            lastPlayerX: 0,
+            lastPlayerY: 0,
+        };
+    },
+
+    canShow(messageType) {
+        const lastTime = this.lastMessageTimes[messageType] || 0;
+        return Date.now() - lastTime >= this.MESSAGE_COOLDOWN;
+    },
+
+    show(messageType, text, color = '#ffff00') {
+        if (!this.canShow(messageType)) return false;
+        this.lastMessageTimes[messageType] = Date.now();
+
+        // Send to parent ticker
+        if (window.parent !== window) {
+            window.parent.postMessage({
+                type: 'TICKER_MESSAGE',
+                game: 'tessles',
+                message: text,
+                level: 'info'
+            }, '*');
+        }
+        return true;
+    },
+
+    // Check for interesting events each frame (called from game loop)
+    checkEvents(elapsedSeconds, circleCount, playerObj) {
+        const stats = this.stats;
+
+        // Track peak enemy count
+        if (circleCount > stats.peakEnemyCount) {
+            stats.peakEnemyCount = circleCount;
+            if (circleCount >= 75) {
+                this.show('peak_enemies_75', 'Chaos mode: 75+ enemies!', '#ff4444');
+            } else if (circleCount >= 50) {
+                this.show('peak_enemies_50', '50 enemies on screen!', '#ff8844');
+            }
+        }
+
+        // Track time without power-up
+        const timeSincePowerUp = (Date.now() - stats.lastPowerUpTime) / 1000;
+        if (timeSincePowerUp >= 90 && elapsedSeconds >= 90) {
+            this.show('no_powerup_90', '90 seconds without a power-up!', '#ff00ff');
+        } else if (timeSincePowerUp >= 60 && elapsedSeconds >= 60) {
+            this.show('no_powerup_60', 'No power-ups for a minute - purist?', '#ffaa00');
+        }
+
+        // Track player idle time
+        const dx = Math.abs(playerObj.x - stats.lastPlayerX);
+        const dy = Math.abs(playerObj.y - stats.lastPlayerY);
+        if (dx < 2 && dy < 2 && circleCount > 10) {
+            stats.playerIdleFrames++;
+            if (stats.playerIdleFrames >= 300) { // 5 seconds at 60fps
+                this.show('player_idle', 'Frozen with fear?', '#aaaaaa');
+                stats.playerIdleFrames = 0;
+            }
+        } else {
+            stats.playerIdleFrames = 0;
+        }
+        stats.lastPlayerX = playerObj.x;
+        stats.lastPlayerY = playerObj.y;
+
+        // Time milestones
+        if (elapsedSeconds === 60) {
+            this.show('survived_60', 'One minute survived!', '#00ffff');
+        } else if (elapsedSeconds === 120) {
+            this.show('survived_120', 'Two minutes - impressive!', '#00ff88');
+        } else if (elapsedSeconds === 180) {
+            this.show('survived_180', 'Three minutes - legendary!', '#ffff00');
+        } else if (elapsedSeconds === 300) {
+            this.show('survived_300', 'FIVE MINUTES?!', '#ff00ff');
+        }
+
+        // Score milestones
+        if (score >= 10000 && !this.lastMessageTimes['score_10000']) {
+            this.show('score_10000', '10,000 points!', '#ffff00');
+        } else if (score >= 5000 && !this.lastMessageTimes['score_5000']) {
+            this.show('score_5000', '5,000 points!', '#00ffff');
+        } else if (score >= 2500 && !this.lastMessageTimes['score_2500']) {
+            this.show('score_2500', '2,500 points!', '#00ff88');
+        }
+
+        // Wave milestones
+        if (waveNumber === 5) {
+            this.show('waves_5', '5 waves survived!', '#00ffff');
+        } else if (waveNumber === 10) {
+            this.show('waves_10', '10 waves - unstoppable!', '#ffff00');
+        }
+
+        // Combo near-miss
+        if (combo >= 20 && combo < 25 && Date.now() - lastNearMissTime > 1500) {
+            this.show('combo_almost_25', 'So close to 25x combo...', '#ff8800');
+        } else if (combo >= 45 && combo < 50 && Date.now() - lastNearMissTime > 1500) {
+            this.show('combo_almost_50', 'Almost 50x! Keep it up!', '#ff00ff');
+        }
+
+        // High combo achievements
+        if (maxCombo === 25) {
+            this.show('combo_25', '25x COMBO!', '#ff00ff');
+        } else if (maxCombo === 50) {
+            this.show('combo_50', '50x COMBO - INCREDIBLE!', '#ffff00');
+        } else if (maxCombo === 100) {
+            this.show('combo_100', '100x COMBO - IMPOSSIBLE!', '#ff0000');
+        }
+
+        // Dash stats
+        if (stats.totalDashes === 10) {
+            this.show('dashes_10', '10 dashes used!', '#ff00ff');
+        }
+        if (stats.dashesWithNoEnemiesNearby >= 3) {
+            this.show('shadow_boxing', 'Shadow boxing?', '#888888');
+            stats.dashesWithNoEnemiesNearby = 0;
+        }
+
+        // Shield meltdown - tracked separately when shields are lost
+
+        // Boss defeated count
+        if (stats.bossesDefeated === 1) {
+            this.show('boss_first', 'Boss wave survived!', '#ff00ff');
+        } else if (stats.bossesDefeated === 3) {
+            this.show('boss_3', '3 bosses down!', '#ffff00');
+        }
+
+        // Perfect waves (no hits taken during wave)
+        if (stats.wavesWithoutHit === 3) {
+            this.show('perfect_waves_3', '3 waves without a scratch!', '#00ff00');
+        }
+
+        // Fury rampage
+        if (stats.furyKills >= 10) {
+            this.show('fury_rampage', `Fury rampage: ${stats.furyKills} kills!`, '#ff0000');
+        }
+
+        // Danger zone time
+        if (stats.dangerZoneTime >= 900) { // 15 seconds at 60fps
+            this.show('danger_zone_15', 'Danger zone thrill seeker!', '#ffaa00');
+        }
+    },
+
+    // Called when collecting a power-up
+    onPowerUpCollected(type) {
+        const stats = this.stats;
+        stats.powerUpsCollected[type] = (stats.powerUpsCollected[type] || 0) + 1;
+        stats.lastPowerUpTime = Date.now();
+
+        const count = stats.powerUpsCollected[type];
+
+        if (type === 'FURY' && count === 1) {
+            this.show('first_fury', 'FURY MODE ACTIVATED!', '#ff0000');
+        } else if (type === 'BOMB' && count === 5) {
+            this.show('bomb_5', 'Bomb enthusiast: 5 collected!', '#ff4400');
+        } else if (type === 'SHIELD' && count === 10) {
+            this.show('shield_10', '10 shields collected!', '#00ff00');
+        }
+    },
+
+    // Called when dash kills a homing enemy
+    onDashKill() {
+        const stats = this.stats;
+        stats.dashKills++;
+
+        if (stats.dashKills === 1) {
+            this.show('first_dash_kill', 'Dash kill! Risky but effective.', '#ff00ff');
+        } else if (stats.dashKills === 5) {
+            this.show('dash_kills_5', '5 dash kills - aggressive!', '#ff00ff');
+        }
+    },
+
+    // Called when fury mode kills an enemy
+    onFuryKill() {
+        this.stats.furyKills++;
+    },
+
+    // Called when a shield blocks a hit
+    onShieldHit(remainingShields) {
+        const stats = this.stats;
+        stats.shieldHits++;
+        stats.lastWaveHitsTaken++;
+
+        if (stats.shieldHits === 1) {
+            this.show('first_shield_hit', 'Shield saved your life!', '#00ff00');
+        }
+
+        // Track rapid shield loss
+        if (remainingShields === 0 && stats.shieldHits >= 3) {
+            const recentHits = stats.shieldHits;
+            if (recentHits >= 3) {
+                this.show('shield_meltdown', 'Shield meltdown!', '#ff4400');
+            }
+        }
+    },
+
+    // Called when bomb kills enemies
+    onBombKill(killCount) {
+        this.stats.bombKills += killCount;
+
+        if (killCount >= 15) {
+            this.show('bomb_mega', `MEGA BOMB: ${killCount} eliminated!`, '#ff4400');
+        } else if (killCount >= 10) {
+            this.show('bomb_big', `Big boom: ${killCount} enemies!`, '#ffaa00');
+        }
+    },
+
+    // Called when mine kills an enemy
+    onMineKill() {
+        this.stats.mineKills++;
+
+        if (this.stats.mineKills === 5) {
+            this.show('mine_5', 'Mine field: 5 kills!', '#ffaa00');
+        }
+    },
+
+    // Called when player has extremely close near-miss
+    onExtremeNearMiss(intensity) {
+        if (intensity > 0.95) {
+            this.show('extreme_near_miss', "Hair's breadth escape!", '#ffff00');
+        }
+    },
+
+    // Called when boss is defeated
+    onBossDefeated() {
+        this.stats.bossesDefeated++;
+    },
+
+    // Called when a wave ends
+    onWaveEnd() {
+        if (this.stats.lastWaveHitsTaken === 0) {
+            this.stats.wavesWithoutHit++;
+        } else {
+            this.stats.wavesWithoutHit = 0;
+        }
+        this.stats.lastWaveHitsTaken = 0;
+    },
+
+    // Called when dash is performed
+    onDash(nearbyEnemyCount) {
+        this.stats.totalDashes++;
+        if (nearbyEnemyCount === 0) {
+            this.stats.dashesWithNoEnemiesNearby++;
+        } else {
+            this.stats.dashesWithNoEnemiesNearby = 0;
+        }
+    },
+
+    // Called when in danger zone
+    onDangerZoneFrame() {
+        this.stats.dangerZoneTime++;
+    },
+
+    // Called when splitter spawns children
+    onSplitterSpawn() {
+        this.stats.splitterSpawns++;
+        if (this.stats.splitterSpawns === 1) {
+            this.show('first_splitter', 'Splitter spawned more!', '#00ff00');
+        }
+    },
+};
+
+// ============================================
 // POWER-UP SYSTEM
 // ============================================
 const PowerUpTypes = {
@@ -1041,6 +1356,7 @@ function spawnPowerUp(forceShield = false) {
 
 function activatePowerUp(type) {
     AudioSystem.playPowerup();
+    SystemMessages.onPowerUpCollected(type);
 
     const popup = new ScorePopup(player.x, player.y - 40, type, PowerUpTypes[type].color);
     scorePopups.push(popup);
@@ -1078,6 +1394,7 @@ function activatePowerUp(type) {
             AudioSystem.playBomb();
             triggerScreenShake(15);
             const bombRadius = 400;
+            let bombKillCount = 0;
             for (let i = circles.length - 1; i >= 0; i--) {
                 const c = circles[i];
                 const dx = c.x - player.x;
@@ -1087,8 +1404,10 @@ function activatePowerUp(type) {
                     spawnParticles(c.x, c.y, `hsl(${c.hue}, 100%, 50%)`, 8, 4, 30, 4);
                     addScore(50, c.x, c.y);
                     circles.splice(i, 1);
+                    bombKillCount++;
                 }
             }
+            SystemMessages.onBombKill(bombKillCount);
             spawnParticles(player.x, player.y, '#ff4400', 20, 10, 40, 8);
             spawnParticles(player.x, player.y, '#ffff00', 15, 8, 35, 6);
             break;
@@ -1340,6 +1659,7 @@ class GameCircle {
                         child.hue = 120;
                         circles.push(child);
                     }
+                    SystemMessages.onSplitterSpawn();
                 }
                 return true;
             }
@@ -1468,6 +1788,11 @@ function updateWave() {
     }
 
     if (waveTimer <= 0) {
+        // Track boss wave completion
+        if (currentWave === WaveTypes.BOSS) {
+            SystemMessages.onBossDefeated();
+        }
+        SystemMessages.onWaveEnd();
         currentWave = null;
     }
 }
@@ -1687,6 +2012,8 @@ function init() {
     Object.keys(powerUpTimers).forEach(key => clearTimeout(powerUpTimers[key]));
     powerUpTimers = {};
 
+    SystemMessages.reset();
+
     document.getElementById("endGame").style.display = "none";
     document.getElementById("gameOverText").style.display = "none";
     document.getElementById("survivedText").style.display = "none";
@@ -1797,6 +2124,14 @@ function performDash() {
 
         const mag = Math.sqrt(dx * dx + dy * dy);
         dashDirection = { x: dx / mag, y: dy / mag };
+
+        // Count nearby enemies for system message tracking
+        const nearbyEnemyCount = circles.filter(c => {
+            const edx = c.x - player.x;
+            const edy = c.y - player.y;
+            return Math.sqrt(edx * edx + edy * edy) < 150;
+        }).length;
+        SystemMessages.onDash(nearbyEnemyCount);
 
         AudioSystem.playDash();
         triggerScreenShake(5);
@@ -1921,6 +2256,7 @@ function gameLoop() {
                 addScore(200, circle.x, circle.y);
                 circles.splice(i, 1);
                 triggerScreenShake(8);
+                SystemMessages.onDashKill();
             }
         }
 
@@ -1964,6 +2300,7 @@ function gameLoop() {
         if (dangerZoneSoundCooldown <= 0) {
             dangerZoneSoundCooldown = 30;
         }
+        SystemMessages.onDangerZoneFrame();
     }
 
     updatePlayerTrail(player.x, player.y);
@@ -1994,6 +2331,8 @@ function gameLoop() {
             nearMissStreak++;
             lastNearMissTime = Date.now();
 
+            SystemMessages.onExtremeNearMiss(nearMissIntensity);
+
             if (combo === 5 || combo === 10 || combo === 25 || combo === 50 || combo === 100) {
                 AudioSystem.playCombo(Math.floor(combo / 5));
                 triggerScreenShake(5);
@@ -2008,6 +2347,7 @@ function gameLoop() {
                 spawnParticles(gameCircle.x, gameCircle.y, `hsl(${gameCircle.hue}, 100%, 50%)`, 8, 4, 25, 4);
                 addScore(100, gameCircle.x, gameCircle.y);
                 triggerScreenShake(5);
+                SystemMessages.onFuryKill();
                 circles.splice(i, 1);
                 i--;
                 continue;
@@ -2018,6 +2358,7 @@ function gameLoop() {
                 AudioSystem.playShieldHit();
                 triggerScreenShake(10);
                 spawnParticles(player.x, player.y, '#00ff00', 15, 6, 30, 5);
+                SystemMessages.onShieldHit(activePowerUps.shield);
                 circles.splice(i, 1);
                 i--;
                 continue;
@@ -2075,6 +2416,7 @@ function gameLoop() {
                     mine.explode();
                     spawnParticles(enemy.x, enemy.y, `hsl(${enemy.hue}, 100%, 50%)`, 8, 4, 30, 4);
                     addScore(75, enemy.x, enemy.y);
+                    SystemMessages.onMineKill();
                     circles.splice(j, 1);
                     mines.splice(i, 1);
                     break;
@@ -2136,6 +2478,9 @@ function gameLoop() {
         domElements.focusBar.style.backgroundColor = focusMeter >= DASH_COST ? '#00ffff' : '#666';
 
         updatePowerUpIndicators();
+
+        // Check for system message events
+        SystemMessages.checkEvents(elapsedSeconds, circles.length, player);
 
         requestAnimationFrame(gameLoop);
     } else {

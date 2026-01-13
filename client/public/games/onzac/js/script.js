@@ -718,12 +718,15 @@ class Turret {
         }
         lightningBolts.push(new LightningBolt(points));
 
+        // Track lightning chain for system messages
+        SystemMessages.onLightningChain(targets.length);
+
         // Damage all targets
         for (let i = targets.length - 1; i >= 0; i--) {
           const target = targets[i];
           const zombieIndex = zombies.indexOf(target);
           if (zombieIndex !== -1) {
-            killZombie(target, zombieIndex);
+            killZombie(target, zombieIndex, 'lightning');
           }
         }
 
@@ -1289,6 +1292,7 @@ class BlackHole {
         gameState.score += 2;
         gameState.zombiesKilled++;
         this.zombiesConsumed++;
+        SystemMessages.onBlackHoleKill();
         zombies.splice(i, 1);
         triggerScreenShake(2);
       } else if (zdist < CONFIG.blackHolePullRange) {
@@ -1446,6 +1450,286 @@ class FloatingText {
     return this.life <= 0;
   }
 }
+
+// ============================================
+// SYSTEM MESSAGES - Commentary on gameplay events
+// ============================================
+const SystemMessages = {
+  lastMessageTimes: {},
+  MESSAGE_COOLDOWN: 60000, // 60 seconds between same message types
+
+  // Session stats for tracking interesting events
+  stats: {
+    weaponKills: { ball: 0, flame: 0, lightning: 0 },
+    weaponSwitches: 0,
+    tankKills: 0,
+    fastKills: 0,
+    lightningChainMax: 0,
+    powerUpsCollected: { nuke: 0, energy: 0, heal: 0, slowmo: 0 },
+    blackHolesDeployed: 0,
+    blackHoleKills: 0,
+    survivorCloseCallCount: 0,
+    survivorsLost: 0,
+    zombiesKilledInBurst: 0,
+    lastKillTime: 0,
+    killBurstCount: 0,
+    energyDepletedCount: 0,
+    timeAtMaxEnergy: 0,
+    screenClearCount: 0,
+    nukeOnSingleZombie: 0,
+    peakZombieCount: 0,
+    lastSurvivorWarned: false,
+  },
+
+  reset() {
+    this.lastMessageTimes = {};
+    this.stats = {
+      weaponKills: { ball: 0, flame: 0, lightning: 0 },
+      weaponSwitches: 0,
+      tankKills: 0,
+      fastKills: 0,
+      lightningChainMax: 0,
+      powerUpsCollected: { nuke: 0, energy: 0, heal: 0, slowmo: 0 },
+      blackHolesDeployed: 0,
+      blackHoleKills: 0,
+      survivorCloseCallCount: 0,
+      survivorsLost: 0,
+      zombiesKilledInBurst: 0,
+      lastKillTime: 0,
+      killBurstCount: 0,
+      energyDepletedCount: 0,
+      timeAtMaxEnergy: 0,
+      screenClearCount: 0,
+      nukeOnSingleZombie: 0,
+      peakZombieCount: 0,
+      lastSurvivorWarned: false,
+    };
+  },
+
+  canShow(messageType) {
+    const lastTime = this.lastMessageTimes[messageType] || 0;
+    return Date.now() - lastTime >= this.MESSAGE_COOLDOWN;
+  },
+
+  show(messageType, text, color = '#ffff00') {
+    if (!this.canShow(messageType)) return false;
+    this.lastMessageTimes[messageType] = Date.now();
+
+    // Send to parent ticker
+    if (window.parent !== window) {
+      window.parent.postMessage({
+        type: 'TICKER_MESSAGE',
+        game: 'onzac',
+        message: text,
+        level: 'info'
+      }, '*');
+    }
+    return true;
+  },
+
+  // Check for interesting events each frame
+  checkEvents(elapsedSeconds, zombieCount, survivorCount, turretEnergy, maxEnergy) {
+    const stats = this.stats;
+
+    // Track peak zombie count
+    if (zombieCount > stats.peakZombieCount) {
+      stats.peakZombieCount = zombieCount;
+      if (zombieCount >= 50) {
+        this.show('peak_zombies_50', 'Zombie horde: 50+ incoming!', '#ff4444');
+      } else if (zombieCount >= 30) {
+        this.show('peak_zombies_30', '30 zombies on screen!', '#ff8844');
+      }
+    }
+
+    // Screen clear detection
+    if (zombieCount === 0 && stats.peakZombieCount > 10) {
+      stats.screenClearCount++;
+      if (stats.screenClearCount === 1) {
+        this.show('screen_clear', 'Screen clear!', '#00ff00');
+      }
+    }
+
+    // Energy tracking
+    if (turretEnergy <= 5) {
+      stats.energyDepletedCount++;
+      if (stats.energyDepletedCount === 1) {
+        this.show('energy_depleted', 'Energy depleted!', '#ff4400');
+      }
+    }
+    if (turretEnergy >= maxEnergy * 0.95) {
+      stats.timeAtMaxEnergy++;
+      if (stats.timeAtMaxEnergy >= 300) { // 5 seconds
+        this.show('max_energy_idle', 'Full energy - fire away!', '#00ffff');
+        stats.timeAtMaxEnergy = 0;
+      }
+    } else {
+      stats.timeAtMaxEnergy = 0;
+    }
+
+    // Time milestones
+    if (elapsedSeconds === 60) {
+      this.show('survived_60', 'One minute survived!', '#00ffff');
+    } else if (elapsedSeconds === 120) {
+      this.show('survived_120', 'Two minutes - impressive!', '#00ff88');
+    } else if (elapsedSeconds === 180) {
+      this.show('survived_180', 'Three minutes!', '#ffff00');
+    }
+
+    // Kill milestones
+    if (gameState.zombiesKilled === 50) {
+      this.show('kills_50', '50 zombies eliminated!', '#00ffff');
+    } else if (gameState.zombiesKilled === 100) {
+      this.show('kills_100', '100 kills!', '#ffff00');
+    } else if (gameState.zombiesKilled === 200) {
+      this.show('kills_200', '200 kills - exterminator!', '#ff00ff');
+    }
+
+    // Score milestones
+    if (gameState.score >= 5000 && !this.lastMessageTimes['score_5000']) {
+      this.show('score_5000', '5,000 points!', '#ffff00');
+    } else if (gameState.score >= 2000 && !this.lastMessageTimes['score_2000']) {
+      this.show('score_2000', '2,000 points!', '#00ffff');
+    }
+
+    // Survivor status
+    if (survivorCount === 12 && elapsedSeconds >= 60) {
+      this.show('all_survivors_60', 'All 12 survivors still alive!', '#00ff00');
+    } else if (survivorCount === 6 && !this.lastMessageTimes['half_survivors']) {
+      this.show('half_survivors', 'Down to 6 survivors...', '#ffaa00');
+    } else if (survivorCount === 1 && !stats.lastSurvivorWarned) {
+      this.show('last_survivor', 'Last survivor - protect them!', '#ff0000');
+      stats.lastSurvivorWarned = true;
+    }
+
+    // Kill burst tracking (reset after 1 second of no kills)
+    if (Date.now() - stats.lastKillTime > 1000) {
+      if (stats.killBurstCount >= 5) {
+        this.show('kill_burst', `Massacre: ${stats.killBurstCount} rapid kills!`, '#ff00ff');
+      }
+      stats.killBurstCount = 0;
+    }
+
+    // Weapon usage milestones
+    if (stats.weaponKills.flame === 50) {
+      this.show('flame_50', 'Flamethrower: 50 kills!', '#ff4400');
+    }
+    if (stats.weaponKills.lightning === 20) {
+      this.show('lightning_20', 'Chain lightning: 20 kills!', '#8888ff');
+    }
+    if (stats.weaponKills.ball === 30) {
+      this.show('ball_30', 'Ball cannon: 30 kills!', '#00ffff');
+    }
+
+    // Weapon switch spam
+    if (stats.weaponSwitches >= 15) {
+      this.show('switch_spam', "Can't decide on a weapon?", '#888888');
+      stats.weaponSwitches = 0;
+    }
+
+    // Tank kills
+    if (stats.tankKills === 1) {
+      this.show('first_tank', 'First tank down!', '#880000');
+    } else if (stats.tankKills === 5) {
+      this.show('tanks_5', '5 tanks eliminated!', '#ff4400');
+    }
+
+    // Fast zombie kills
+    if (stats.fastKills === 10) {
+      this.show('fast_10', '10 speedsters eliminated!', '#ffaa00');
+    }
+
+    // Black hole stats
+    if (stats.blackHoleKills >= 15) {
+      this.show('blackhole_15', `Black hole consumed ${stats.blackHoleKills} zombies!`, '#8800ff');
+      stats.blackHoleKills = 0;
+    }
+
+    // Lightning chain achievement
+    if (stats.lightningChainMax === 4) {
+      this.show('perfect_chain', 'Perfect 4-chain lightning!', '#8888ff');
+    }
+  },
+
+  // Called when a zombie is killed
+  onZombieKill(zombieType, weapon) {
+    const stats = this.stats;
+    stats.lastKillTime = Date.now();
+    stats.killBurstCount++;
+
+    if (weapon) {
+      stats.weaponKills[weapon] = (stats.weaponKills[weapon] || 0) + 1;
+    }
+
+    if (zombieType === 'tank') {
+      stats.tankKills++;
+    } else if (zombieType === 'fast') {
+      stats.fastKills++;
+    }
+  },
+
+  // Called when lightning chains
+  onLightningChain(chainCount) {
+    if (chainCount > this.stats.lightningChainMax) {
+      this.stats.lightningChainMax = chainCount;
+    }
+  },
+
+  // Called when a power-up is collected
+  onPowerUpCollected(type, zombieCount) {
+    const stats = this.stats;
+    stats.powerUpsCollected[type] = (stats.powerUpsCollected[type] || 0) + 1;
+
+    if (type === 'nuke') {
+      if (zombieCount <= 1) {
+        this.show('nuke_overkill', 'Overkill much?', '#888888');
+      } else if (zombieCount >= 20) {
+        this.show('nuke_massive', `NUKE: ${zombieCount} zombies vaporized!`, '#ff0000');
+      }
+    }
+
+    const count = stats.powerUpsCollected[type];
+    if (type === 'slowmo' && count === 1) {
+      this.show('first_slowmo', 'Slow-mo activated!', '#ffff00');
+    } else if (type === 'nuke' && count === 3) {
+      this.show('nuke_3', 'Nuclear enthusiast!', '#ff0000');
+    }
+  },
+
+  // Called when a survivor is infected
+  onSurvivorInfected(remainingSurvivors) {
+    this.stats.survivorsLost++;
+
+    if (this.stats.survivorsLost === 1) {
+      this.show('first_casualty', 'First casualty...', '#ff4400');
+    }
+  },
+
+  // Called when a survivor has a close call
+  onSurvivorCloseCall() {
+    this.stats.survivorCloseCallCount++;
+    if (this.stats.survivorCloseCallCount % 3 === 1) {
+      this.show('survivor_close', 'Close call on survivor!', '#ffaa00');
+    }
+  },
+
+  // Called when weapon is switched
+  onWeaponSwitch() {
+    this.stats.weaponSwitches++;
+  },
+
+  // Called when black hole is deployed
+  onBlackHoleDeployed() {
+    this.stats.blackHolesDeployed++;
+    if (this.stats.blackHolesDeployed === 1) {
+      this.show('first_blackhole', 'Black hole deployed!', '#8800ff');
+    }
+  },
+
+  // Called when black hole kills a zombie
+  onBlackHoleKill() {
+    this.stats.blackHoleKills++;
+  },
+};
 
 // ============================================
 // POWER-UP CLASS
@@ -1857,6 +2141,7 @@ function deployBlackHole() {
   if (gameState.blackHolesAvailable <= 0) return;
 
   gameState.blackHolesAvailable--;
+  SystemMessages.onBlackHoleDeployed();
   spawnBlackHole();
 }
 
@@ -1928,6 +2213,7 @@ function switchWeapon() {
   turret.isCharging = false;
   turret.chargeLevel = 0;
 
+  SystemMessages.onWeaponSwitch();
   AudioSystem.play('weaponSwitch');
 
   const weaponNames = {
@@ -2277,7 +2563,7 @@ function addScore(points, x, y) {
   addFloatingText(x, y - 20, `+${total}`, multiplier > 1 ? '#FFD700' : '#FFFFFF', multiplier > 1 ? 14 : 12);
 }
 
-function killZombie(zombie, index) {
+function killZombie(zombie, index, weapon = null) {
   const now = Date.now();
 
   if (now - gameState.lastKillTime < CONFIG.comboWindow) {
@@ -2289,6 +2575,9 @@ function killZombie(zombie, index) {
   }
   gameState.lastKillTime = now;
   gameState.zombiesKilled++;
+
+  // Track kill for system messages
+  SystemMessages.onZombieKill(zombie.type, weapon || gameState.currentWeapon);
 
   let points = 1;
   if (zombie.type === 'fast') points = 3;
@@ -2323,10 +2612,16 @@ function infectTriangle(triangle, index) {
 
   uninfectedTriangles.splice(index, 1);
   addFloatingText(triangle.x, triangle.y, 'INFECTED!', '#FF0000', 14);
+
+  // Track survivor loss for system messages
+  SystemMessages.onSurvivorInfected(uninfectedTriangles.length);
 }
 
 function activatePowerUp(powerUp) {
   AudioSystem.play('powerup');
+
+  // Track power-up collection (capture zombie count before nuke clears them)
+  const zombieCountBeforeNuke = zombies.length;
 
   switch(powerUp.type) {
     case 'nuke':
@@ -2338,18 +2633,21 @@ function activatePowerUp(powerUp) {
       zombies.length = 0;
       triggerScreenShake(15);
       addFloatingText(canvas.width / 2, canvas.height / 2, 'NUKE!', '#FF0000', 28);
+      SystemMessages.onPowerUpCollected('nuke', zombieCountBeforeNuke);
       break;
 
     case 'energy':
       turret.energy = turret.maxEnergy;
       turret.maxEnergy = Math.min(150, turret.maxEnergy + 10);
       addFloatingText(powerUp.x, powerUp.y, 'MAX ENERGY!', '#00FFFF', 18);
+      SystemMessages.onPowerUpCollected('energy', 0);
       break;
 
     case 'heal':
       // Bonus energy instead of heal
       turret.addEnergy(50);
       addFloatingText(powerUp.x, powerUp.y, '+50 ENERGY!', '#00FF00', 18);
+      SystemMessages.onPowerUpCollected('heal', 0);
       break;
 
     case 'slowmo':
@@ -2358,6 +2656,7 @@ function activatePowerUp(powerUp) {
         zombie.vy *= 0.3;
       }
       addFloatingText(powerUp.x, powerUp.y, 'SLOW-MO!', '#FFFF00', 18);
+      SystemMessages.onPowerUpCollected('slowmo', 0);
       setTimeout(() => {
         for (const zombie of zombies) {
           zombie.vx /= 0.3;
@@ -2443,6 +2742,8 @@ function resetGame() {
   }
 
   spawnUninfected(CONFIG.uninfectedAmount);
+
+  SystemMessages.reset();
 
   // Notify parent that a new game is starting
   sendGameStart();
@@ -2530,13 +2831,24 @@ function update() {
     }
   }
 
-  // Check zombie-uninfected collisions
+  // Check zombie-uninfected collisions and close calls
   for (let i = uninfectedTriangles.length - 1; i >= 0; i--) {
     if (!uninfectedTriangles[i]) continue;
+    const tri = uninfectedTriangles[i];
     for (const zombie of zombies) {
-      if (!zombie.dying && uninfectedTriangles[i].collidesWith(zombie)) {
-        infectTriangle(uninfectedTriangles[i], i);
+      if (zombie.dying) continue;
+
+      if (tri.collidesWith(zombie)) {
+        infectTriangle(tri, i);
         break;
+      }
+
+      // Check for close call (within 30px but not colliding)
+      const dx = zombie.x - tri.x;
+      const dy = zombie.y - tri.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 30 + zombie.size + tri.size) {
+        SystemMessages.onSurvivorCloseCall();
       }
     }
   }
@@ -2585,6 +2897,17 @@ function update() {
 
   // Check for black hole reward
   checkBlackHoleReward();
+
+  // Check for system message events
+  const elapsedMs = Date.now() - gameState.gameStartTime - totalPausedTime;
+  const elapsedSeconds = Math.floor(elapsedMs / 1000);
+  SystemMessages.checkEvents(
+    elapsedSeconds,
+    zombies.length,
+    uninfectedTriangles.length,
+    turret.energy,
+    turret.maxEnergy
+  );
 }
 
 // ============================================
@@ -2696,6 +3019,7 @@ function initGame() {
     mobileWeaponBtn.style.background = 'rgba(0, 255, 255, 0.3)';
   }
   spawnUninfected(CONFIG.uninfectedAmount);
+  SystemMessages.reset();
   AudioSystem.startMusic();
   sendGameStart();
 }
