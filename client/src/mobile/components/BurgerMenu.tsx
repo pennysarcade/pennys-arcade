@@ -7,12 +7,6 @@ interface BurgerMenuProps {
   onClose: () => void
 }
 
-const SECONDARY_ITEMS = [
-  { id: '/about', label: 'About' },
-  { id: '/leaderboard', label: 'Leaderboard' },
-  { id: '/privacy', label: 'Privacy Policy' },
-]
-
 export default function BurgerMenu({ isOpen, onClose }: BurgerMenuProps) {
   const location = useLocation()
   const navigate = useNavigate()
@@ -21,10 +15,14 @@ export default function BurgerMenu({ isOpen, onClose }: BurgerMenuProps) {
 
   const isSignedIn = user && !user.isGuest
 
-  const mainNavItems = [
+  // Menu items ordered by importance, matching desktop layout
+  const menuItems = [
     { id: '/', label: 'Home' },
     { id: '/chat', label: 'Chat' },
     { id: '/profile', label: isSignedIn ? 'Profile' : 'Sign In' },
+    { id: '/about', label: 'About' },
+    { id: '/leaderboard', label: 'Leaderboard' },
+    { id: '/privacy', label: 'Privacy' },
   ]
 
   const isActive = (path: string) => {
@@ -61,20 +59,8 @@ export default function BurgerMenu({ isOpen, onClose }: BurgerMenuProps) {
         </div>
 
         <div className="mobile-menu-content">
-          <div className="mobile-menu-section mobile-menu-main-nav">
-            {mainNavItems.map((item) => (
-              <button
-                key={item.id}
-                className={`mobile-menu-item ${isActive(item.id) ? 'active' : ''}`}
-                onClick={() => handleNavigation(item.id)}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-
           <div className="mobile-menu-section">
-            {SECONDARY_ITEMS.map((item) => (
+            {menuItems.map((item) => (
               <button
                 key={item.id}
                 className={`mobile-menu-item ${isActive(item.id) ? 'active' : ''}`}
@@ -87,11 +73,10 @@ export default function BurgerMenu({ isOpen, onClose }: BurgerMenuProps) {
 
           <div className="mobile-menu-section">
             <button
-              className="mobile-menu-item mobile-menu-item-switch"
+              className="mobile-menu-item"
               onClick={handleSwitchToDesktop}
               title="Switch to desktop version"
             >
-              <span className="mobile-menu-item-icon">🖥️</span>
               Desktop Version
             </button>
           </div>

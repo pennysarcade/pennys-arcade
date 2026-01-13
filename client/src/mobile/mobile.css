@@ -45,7 +45,9 @@
   display: flex;
   align-items: center;
   cursor: pointer;
-  flex-shrink: 0;
+  flex: 1;
+  justify-content: center;
+  margin-left: 44px; /* Balance the menu button on the right */
 }
 
 .mobile-logo-img {
@@ -58,11 +60,21 @@
 .mobile-header-title {
   font-family: var(--font-heading);
   font-size: 0.85rem;
-  color: var(--neon-cyan);
   text-transform: uppercase;
   letter-spacing: 2px;
   margin-left: 0.75rem;
-  text-shadow: 0 0 8px var(--neon-cyan);
+  background-image: linear-gradient(to right, #ff00ff, #00ffff, #ff00ff, #00ffff, #ff00ff);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: shimmer 4s linear infinite;
+  filter: drop-shadow(0 0 6px rgba(255, 0, 255, 0.6)) drop-shadow(0 0 12px rgba(0, 255, 255, 0.4));
+}
+
+@keyframes shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: -100% 50%; }
 }
 
 .mobile-header-nav {
@@ -226,18 +238,6 @@
 .mobile-menu-item.active {
   color: var(--neon-cyan);
   background: rgba(0, 255, 255, 0.05);
-}
-
-.mobile-menu-main-nav {
-  padding-top: 0.75rem;
-  padding-bottom: 0.75rem;
-}
-
-.mobile-menu-main-nav .mobile-menu-item {
-  font-family: var(--font-heading);
-  font-size: 1.1rem;
-  text-transform: uppercase;
-  letter-spacing: 1px;
 }
 
 .mobile-menu-item-icon {

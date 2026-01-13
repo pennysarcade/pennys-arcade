@@ -137,7 +137,7 @@ export default function Leaderboard() {
                       <span className="leaderboard-player">
                         {score.avatar_image ? (
                           <img
-                            src={score.avatar_image}
+                            src={`/avatars/${score.avatar_image}`}
                             alt=""
                             className="leaderboard-avatar leaderboard-avatar-img"
                           />
