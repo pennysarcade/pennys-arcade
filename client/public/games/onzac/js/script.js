@@ -1718,38 +1718,25 @@ function spawnPowerUp(x, y) {
 // BLACK HOLE SYSTEM
 // ============================================
 function checkBlackHoleReward() {
+  // Black holes disabled on mobile
+  if (isMobileMode) return;
+
   const threshold = Math.floor(gameState.score / CONFIG.blackHolePointsRequired);
   if (threshold > gameState.lastBlackHoleScoreThreshold) {
     gameState.lastBlackHoleScoreThreshold = threshold;
 
-    // On mobile, auto-deploy black hole immediately
-    if (isMobileMode) {
-      spawnBlackHole();
-      AudioSystem.play('blackhole');
-      addFloatingText(canvas.width / 2, canvas.height / 2, 'BLACK HOLE DEPLOYED!', '#8800FF', 18);
+    // Desktop: require manual deployment with [B] key
+    gameState.blackHolesAvailable++;
+    AudioSystem.play('blackholeReady');
+    addFloatingText(canvas.width / 2, canvas.height / 2, 'BLACK HOLE READY! [B]', '#8800FF', 18);
 
-      if (window.parent !== window) {
-        window.parent.postMessage({
-          type: 'TICKER_MESSAGE',
-          game: 'onzac',
-          message: 'BLACK HOLE AUTO-DEPLOYED!',
-          level: 'celebration'
-        }, '*');
-      }
-    } else {
-      // Desktop: require manual deployment with [B] key
-      gameState.blackHolesAvailable++;
-      AudioSystem.play('blackholeReady');
-      addFloatingText(canvas.width / 2, canvas.height / 2, 'BLACK HOLE READY! [B]', '#8800FF', 18);
-
-      if (window.parent !== window) {
-        window.parent.postMessage({
-          type: 'TICKER_MESSAGE',
-          game: 'onzac',
-          message: `BLACK HOLE READY! Press [B] to deploy!`,
-          level: 'celebration'
-        }, '*');
-      }
+    if (window.parent !== window) {
+      window.parent.postMessage({
+        type: 'TICKER_MESSAGE',
+        game: 'onzac',
+        message: `BLACK HOLE READY! Press [B] to deploy!`,
+        level: 'celebration'
+      }, '*');
     }
   }
 }

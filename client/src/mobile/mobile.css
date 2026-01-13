@@ -20,7 +20,8 @@
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
-  padding-bottom: env(safe-area-inset-bottom, 0);
+  /* Account for ticker bar at bottom */
+  padding-bottom: calc(40px + env(safe-area-inset-bottom, 0));
 }
 
 /* ========================================
@@ -940,4 +941,39 @@
   font-size: 0.5rem;
   padding: 0.25rem 0.5rem;
   margin-right: 0.5rem;
+}
+
+/* ========================================
+   MOBILE TICKER
+   ======================================== */
+
+.mobile-ticker {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 32px;
+  background: var(--bg-card);
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  z-index: 90;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+.mobile-ticker .typewriter-ticker {
+  padding: 0 0.75rem;
+}
+
+.mobile-ticker .typewriter-text {
+  font-family: var(--font-heading);
+  font-size: 0.55rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.mobile-ticker .typewriter-cursor {
+  animation: blink 0.7s infinite;
 }
