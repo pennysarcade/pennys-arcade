@@ -79,7 +79,7 @@ interface SocketContextType {
   editMessage: (messageId: number, newText: string) => void
   clearAnnouncement: () => void
   clearHighScoreAnnouncement: () => void
-  addTickerMessage: (text: string, type?: TickerMessage['type']) => void
+  addTickerMessage: (text: string, type?: TickerMessage['type'], priority?: 'high' | 'low') => void
   removeTickerMessage: (id: number) => void
 }
 
@@ -101,10 +101,15 @@ export function SocketProvider({ children }: { children: ReactNode }) {
   const [tickerMessages, setTickerMessages] = useState<TickerMessage[]>([])
 
   // Add a ticker message to the queue
-  const addTickerMessage = useCallback((text: string, type: TickerMessage['type'] = 'info') => {
-    const msgId = ++tickerIdCounter
-    const newMessage: TickerMessage = { id: msgId, text, type, timestamp: Date.now() }
-    setTickerMessages(prev => [...prev, newMessage])
+  // Low priority messages are only added if queue is empty
+  const addTickerMessage = useCallback((text: string, type: TickerMessage['type'] = 'info', priority: 'high' | 'low' = 'high') => {
+    setTickerMessages(prev => {
+      // Skip low priority messages if queue is not empty
+      if (priority === 'low' && prev.length > 0) return prev
+      const msgId = ++tickerIdCounter
+      const newMessage: TickerMessage = { id: msgId, text, type, timestamp: Date.now() }
+      return [...prev, newMessage]
+    })
   }, [])
 
   // Remove a ticker message (called by TypewriterTicker when done)

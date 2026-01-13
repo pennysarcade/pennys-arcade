@@ -117,8 +117,14 @@ export default function MobileGame() {
           addTickerMessage(`NEW #1 HIGH SCORE! ${score.toLocaleString()} pts`, 'celebration')
         } else if (data.isPersonalBest) {
           addTickerMessage(`New personal best! ${score.toLocaleString()} pts (#${data.rank})`, 'success')
+          if (data.pointsFromHighScore > 0) {
+            addTickerMessage(`${data.pointsFromHighScore.toLocaleString()} pts to beat ${data.highScoreHolder}`, 'info', 'low')
+          }
         } else {
           addTickerMessage(`Score: ${score.toLocaleString()} pts (#${data.rank})`, 'success')
+          if (data.pointsFromHighScore > 0) {
+            addTickerMessage(`${data.pointsFromHighScore.toLocaleString()} pts to beat ${data.highScoreHolder}`, 'info', 'low')
+          }
         }
         setSessionStatus('idle')
         setSessionId(null)
@@ -150,8 +156,14 @@ export default function MobileGame() {
           addTickerMessage(`NEW #1 HIGH SCORE! ${score.toLocaleString()} pts`, 'celebration')
         } else if (data.isPersonalBest) {
           addTickerMessage(`New personal best! ${score.toLocaleString()} pts (#${data.rank})`, 'success')
+          if (data.pointsFromHighScore > 0) {
+            addTickerMessage(`${data.pointsFromHighScore.toLocaleString()} pts to beat ${data.highScoreHolder}`, 'info', 'low')
+          }
         } else {
           addTickerMessage(`Score: ${score.toLocaleString()} pts (#${data.rank})`, 'success')
+          if (data.pointsFromHighScore > 0) {
+            addTickerMessage(`${data.pointsFromHighScore.toLocaleString()} pts to beat ${data.highScoreHolder}`, 'info', 'low')
+          }
         }
         return true
       }
