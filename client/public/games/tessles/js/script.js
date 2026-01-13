@@ -29,8 +29,19 @@ const AudioSystem = {
     isPlaying: false,
 
     init() {
-        if (this.ctx) return;
+        if (this.ctx) {
+            // Resume if suspended (required for mobile browsers)
+            if (this.ctx.state === 'suspended') {
+                this.ctx.resume();
+            }
+            return;
+        }
         this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+        // Resume immediately for mobile browsers
+        if (this.ctx.state === 'suspended') {
+            this.ctx.resume();
+        }
 
         this.masterGain = this.ctx.createGain();
         this.masterGain.gain.value = 0.3;

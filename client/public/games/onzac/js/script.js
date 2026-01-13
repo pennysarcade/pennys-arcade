@@ -137,8 +137,19 @@ const AudioSystem = {
   enabled: true,
 
   init() {
+    if (this.ctx) {
+      // Resume if suspended (required for mobile browsers)
+      if (this.ctx.state === 'suspended') {
+        this.ctx.resume();
+      }
+      return;
+    }
     try {
       this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      // Resume immediately for mobile browsers
+      if (this.ctx.state === 'suspended') {
+        this.ctx.resume();
+      }
     } catch (e) {
       this.enabled = false;
     }
@@ -348,9 +359,12 @@ const AudioSystem = {
   }
 };
 
-document.addEventListener('click', () => {
-  if (!AudioSystem.ctx) AudioSystem.init();
-}, { once: true });
+// Initialize audio on first user interaction (click or touch)
+const initAudioOnInteraction = () => {
+  AudioSystem.init();
+};
+document.addEventListener('click', initAudioOnInteraction, { once: true });
+document.addEventListener('touchstart', initAudioOnInteraction, { once: true });
 
 // ============================================
 // CANVAS SETUP

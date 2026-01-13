@@ -49,6 +49,7 @@ export default function MobileGame() {
 
     sessionStartedRef.current = true
     setSessionStatus('starting')
+    addTickerMessage('Starting session...', 'info')
 
     try {
       const response = await fetch(`/api/scores/session/start/${gameId}`, {
@@ -64,16 +65,19 @@ export default function MobileGame() {
         const data = await response.json()
         setSessionId(data.sessionId)
         setSessionStatus('playing')
+        addTickerMessage('Session active - scores will be saved', 'success')
         return data.sessionId
       } else {
         setSessionStatus('error')
+        addTickerMessage('Session error - scores may not save', 'error')
         return null
       }
     } catch {
       setSessionStatus('error')
+      addTickerMessage('Session error - scores may not save', 'error')
       return null
     }
-  }, [token, user?.isGuest])
+  }, [token, user?.isGuest, addTickerMessage])
 
   const updateSessionScore = useCallback(async (currentSessionId: number, score: number, stats?: unknown) => {
     if (!token || user?.isGuest) return
