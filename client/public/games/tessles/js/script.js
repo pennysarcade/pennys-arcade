@@ -1026,6 +1026,11 @@ function spawnPowerUp(forceShield = false) {
             }
         }
 
+        // FURY is 25% rarer - only spawn 75% of the time
+        if (Math.random() > 0.75) {
+            types = types.filter(t => t !== 'FURY');
+        }
+
         type = types[Math.floor(Math.random() * types.length)];
     }
     const padding = 100;
@@ -1638,6 +1643,9 @@ let spawnTimer = 0;
 let powerUpSpawnTimer = 0;
 let dangerZoneSoundCooldown = 0;
 let canvasClearedTime = 0; // Track when all enemies were cleared
+let paused = false;
+let pauseStartTime = 0;
+let totalPausedTime = 0;
 
 function init() {
     gameOver = false;
@@ -1645,6 +1653,9 @@ function init() {
     spawnTimer = 0;
     powerUpSpawnTimer = 300;
     canvasClearedTime = 0;
+    paused = false;
+    pauseStartTime = 0;
+    totalPausedTime = 0;
     circles = [];
     particles = [];
     playerTrail = [];
@@ -1792,7 +1803,40 @@ function performDash() {
     }
 }
 
+function drawPauseOverlay() {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.fillStyle = '#00ffff';
+    ctx.font = 'bold 48px "Press Start 2P", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('PAUSED', canvas.width / 2, canvas.height / 2 - 20);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '16px "Press Start 2P", monospace';
+    ctx.fillText('Press P to resume', canvas.width / 2, canvas.height / 2 + 30);
+}
+
+function togglePause() {
+    if (gameOver || !gameStarted) return;
+
+    paused = !paused;
+    if (paused) {
+        pauseStartTime = Date.now();
+        AudioSystem.stopMusic();
+    } else {
+        totalPausedTime += Date.now() - pauseStartTime;
+        AudioSystem.startMusic();
+    }
+}
+
 function gameLoop() {
+    if (paused) {
+        drawPauseOverlay();
+        requestAnimationFrame(gameLoop);
+        return;
+    }
+
     updateScreenShake();
     ctx.save();
     ctx.translate(screenShake.x, screenShake.y);
@@ -1801,7 +1845,7 @@ function gameLoop() {
 
     drawDangerZones();
 
-    const elapsedMillis = Date.now() - startTime;
+    const elapsedMillis = Date.now() - startTime - totalPausedTime;
     const elapsedSeconds = Math.floor(elapsedMillis / 1000);
 
     if (elapsedSeconds >= 30 && elapsedSeconds - lastWaveTime >= 30 && !currentWave) {
@@ -2267,9 +2311,14 @@ document.addEventListener('keydown', (e) => {
         keys[e.key] = true;
     }
 
-    if (e.code === 'Space' && gameStarted && !gameOver) {
+    if (e.code === 'Space' && gameStarted && !gameOver && !paused) {
         e.preventDefault();
         performDash();
+    }
+
+    if ((e.key === 'p' || e.key === 'P') && gameStarted && !gameOver) {
+        e.preventDefault();
+        togglePause();
     }
 });
 

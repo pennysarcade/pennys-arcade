@@ -1190,6 +1190,15 @@ h3 {
   overflow: hidden;
 }
 
+.typewriter-text.scrolling {
+  animation: tickerScroll 8s linear;
+}
+
+@keyframes tickerScroll {
+  0%, 10% { transform: translateX(0); }
+  90%, 100% { transform: translateX(var(--scroll-distance)); }
+}
+
 .typewriter-info {
   color: var(--neon-cyan);
   text-shadow: 0 0 8px var(--neon-cyan);

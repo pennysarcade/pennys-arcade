@@ -135,6 +135,10 @@ const input = {
 const AudioSystem = {
   ctx: null,
   enabled: true,
+  masterGain: null,
+  musicGain: null,
+  sfxGain: null,
+  isPlaying: false,
 
   init() {
     if (this.ctx) {
@@ -150,9 +154,100 @@ const AudioSystem = {
       if (this.ctx.state === 'suspended') {
         this.ctx.resume();
       }
+
+      // Set up gain nodes
+      this.masterGain = this.ctx.createGain();
+      this.masterGain.gain.value = 0.3;
+      this.masterGain.connect(this.ctx.destination);
+
+      this.musicGain = this.ctx.createGain();
+      this.musicGain.gain.value = 0.12;
+      this.musicGain.connect(this.masterGain);
+
+      this.sfxGain = this.ctx.createGain();
+      this.sfxGain.gain.value = 0.5;
+      this.sfxGain.connect(this.masterGain);
     } catch (e) {
       this.enabled = false;
     }
+  },
+
+  startMusic() {
+    if (this.isPlaying || !this.enabled || !this.ctx) return;
+    this.isPlaying = true;
+
+    // Dark, ominous zombie music
+    // Deep bass drone with unsettling minor progression
+    const baseNotes = [55, 65.41, 73.42, 82.41]; // A1, C2, D2, E2 - dark minor feel
+    const tempo = 0.3; // Slower, more ominous
+    let noteIndex = 0;
+
+    const playNote = () => {
+      if (!this.isPlaying || !this.ctx) return;
+
+      // Deep bass drone
+      const bassOsc = this.ctx.createOscillator();
+      const bassGain = this.ctx.createGain();
+      bassOsc.type = 'sawtooth';
+      bassOsc.frequency.value = baseNotes[noteIndex % baseNotes.length];
+      bassOsc.detune.value = Math.random() * 20 - 10;
+      bassGain.gain.setValueAtTime(0.15, this.ctx.currentTime);
+      bassGain.gain.setTargetAtTime(0.02, this.ctx.currentTime, tempo * 0.8);
+      bassOsc.connect(bassGain);
+      bassGain.connect(this.musicGain);
+      bassOsc.start();
+      bassOsc.stop(this.ctx.currentTime + tempo * 0.9);
+
+      // Eerie high pad (every other note)
+      if (noteIndex % 2 === 0) {
+        const padOsc = this.ctx.createOscillator();
+        const padGain = this.ctx.createGain();
+        padOsc.type = 'sine';
+        padOsc.frequency.value = baseNotes[noteIndex % baseNotes.length] * 4 + Math.random() * 10;
+        padGain.gain.setValueAtTime(0.03, this.ctx.currentTime);
+        padGain.gain.setTargetAtTime(0.01, this.ctx.currentTime, tempo * 0.5);
+        padOsc.connect(padGain);
+        padGain.connect(this.musicGain);
+        padOsc.start();
+        padOsc.stop(this.ctx.currentTime + tempo * 0.6);
+      }
+
+      // Random dissonant accent (occasional)
+      if (Math.random() < 0.15) {
+        const accentOsc = this.ctx.createOscillator();
+        const accentGain = this.ctx.createGain();
+        accentOsc.type = 'square';
+        accentOsc.frequency.value = 110 + Math.random() * 50;
+        accentGain.gain.setValueAtTime(0.04, this.ctx.currentTime);
+        accentGain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.15);
+        accentOsc.connect(accentGain);
+        accentGain.connect(this.musicGain);
+        accentOsc.start();
+        accentOsc.stop(this.ctx.currentTime + 0.15);
+      }
+
+      noteIndex++;
+
+      // Change progression every 8 notes
+      if (noteIndex % 8 === 0) {
+        const progressions = [
+          [55, 65.41, 73.42, 82.41],   // Am feel
+          [51.91, 61.74, 69.30, 77.78], // G#m feel
+          [58.27, 69.30, 77.78, 87.31], // Bbm feel
+          [49, 58.27, 65.41, 73.42],   // Gm feel
+        ];
+        const progIndex = Math.floor(noteIndex / 8) % progressions.length;
+        baseNotes.splice(0, 4, ...progressions[progIndex]);
+      }
+
+      setTimeout(playNote, tempo * 1000);
+    };
+
+    playNote();
+  },
+
+  stopMusic() {
+    this.isPlaying = false;
   },
 
   play(type) {
@@ -380,6 +475,9 @@ window.addEventListener("resize", resizeCanvas);
 // WELCOME SCREEN SETUP
 // ============================================
 let gameStarted = false;
+let paused = false;
+let pauseStartTime = 0;
+let totalPausedTime = 0;
 
 const welcomeScreen = document.createElement('div');
 welcomeScreen.id = 'onzac-welcome';
@@ -2133,8 +2231,8 @@ document.addEventListener('keydown', (e) => {
     }
     return;
   }
-  // Spacebar to switch weapons (only when not game over)
-  if (e.code === 'Space' && !gameState.gameOver) {
+  // Spacebar to switch weapons (only when not game over and not paused)
+  if (e.code === 'Space' && !gameState.gameOver && !paused) {
     e.preventDefault();
     switchWeapon();
   }
@@ -2143,6 +2241,12 @@ document.addEventListener('keydown', (e) => {
   if ((e.code === 'KeyB') && !gameState.gameOver && gameState.blackHolesAvailable > 0) {
     e.preventDefault();
     deployBlackHole();
+  }
+
+  // P key to pause/unpause
+  if ((e.key === 'p' || e.key === 'P') && gameStarted && !gameState.gameOver) {
+    e.preventDefault();
+    togglePause();
   }
 });
 
@@ -2296,6 +2400,14 @@ function sendGameStart() {
 }
 
 function resetGame() {
+  // Reset pause state
+  paused = false;
+  pauseStartTime = 0;
+  totalPausedTime = 0;
+
+  // Start music for new game
+  AudioSystem.startMusic();
+
   gameState.score = 0;
   gameState.combo = 0;
   gameState.maxCombo = 0;
@@ -2345,6 +2457,7 @@ function update() {
   if (uninfectedTriangles.length === 0) {
     gameState.gameOver = true;
     gameState.gameOverTime = Date.now();
+    AudioSystem.stopMusic();
     AudioSystem.play('gameover');
     hideMobileWeaponBtn();
     // Send score immediately when game ends
@@ -2527,11 +2640,44 @@ function draw() {
 }
 
 // ============================================
+// PAUSE FUNCTIONALITY
+// ============================================
+function drawPauseOverlay() {
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#00ffff';
+  ctx.font = 'bold 48px "Press Start 2P", monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('PAUSED', canvas.width / 2, canvas.height / 2 - 20);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '16px "Press Start 2P", monospace';
+  ctx.fillText('Press P to resume', canvas.width / 2, canvas.height / 2 + 30);
+  ctx.textAlign = 'left';
+}
+
+function togglePause() {
+  if (gameState.gameOver || !gameStarted) return;
+  paused = !paused;
+  if (paused) {
+    pauseStartTime = Date.now();
+    AudioSystem.stopMusic();
+  } else {
+    totalPausedTime += Date.now() - pauseStartTime;
+    AudioSystem.startMusic();
+  }
+}
+
+// ============================================
 // GAME LOOP
 // ============================================
 function gameLoop() {
-  update();
-  draw();
+  if (paused) {
+    draw();
+    drawPauseOverlay();
+  } else {
+    update();
+    draw();
+  }
   requestAnimationFrame(gameLoop);
 }
 
@@ -2550,6 +2696,7 @@ function initGame() {
     mobileWeaponBtn.style.background = 'rgba(0, 255, 255, 0.3)';
   }
   spawnUninfected(CONFIG.uninfectedAmount);
+  AudioSystem.startMusic();
   sendGameStart();
 }
 
