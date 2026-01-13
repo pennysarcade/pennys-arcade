@@ -167,13 +167,14 @@ export const GEM_MAX_VALUE = 200
 export const CROWN_VALUE = 500
 export const CROWN_SPAWN_CHANCE = 0.1 // 10% chance when spawning powerup
 
-// Starting positions (4 positions around the edge of the hex grid)
+// Starting positions (4 positions slightly inward from edges so players can move any direction)
 export function getStartingPositions(gridSize: number): HexCoord[] {
+  const offset = 2; // Start 2 hexes inward from edge
   return [
-    { q: -gridSize, r: 0 }, // West
-    { q: gridSize, r: 0 }, // East
-    { q: 0, r: -gridSize }, // North
-    { q: 0, r: gridSize }, // South
+    { q: -(gridSize - offset), r: 0 }, // West
+    { q: gridSize - offset, r: 0 }, // East
+    { q: 0, r: -(gridSize - offset) }, // North
+    { q: 0, r: gridSize - offset }, // South
   ]
 }
 
