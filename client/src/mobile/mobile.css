@@ -55,6 +55,16 @@
   border-radius: 4px;
 }
 
+.mobile-header-title {
+  font-family: var(--font-heading);
+  font-size: 0.85rem;
+  color: var(--neon-cyan);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-left: 0.75rem;
+  text-shadow: 0 0 8px var(--neon-cyan);
+}
+
 .mobile-header-nav {
   display: flex;
   align-items: center;
@@ -211,6 +221,23 @@
 .mobile-menu-item:hover,
 .mobile-menu-item:active {
   background: var(--bg-card-hover);
+}
+
+.mobile-menu-item.active {
+  color: var(--neon-cyan);
+  background: rgba(0, 255, 255, 0.05);
+}
+
+.mobile-menu-main-nav {
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+}
+
+.mobile-menu-main-nav .mobile-menu-item {
+  font-family: var(--font-heading);
+  font-size: 1.1rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 .mobile-menu-item-icon {

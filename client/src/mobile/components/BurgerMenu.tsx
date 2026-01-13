@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { useDeviceType } from '../../hooks/useDeviceType'
 
@@ -7,16 +7,32 @@ interface BurgerMenuProps {
   onClose: () => void
 }
 
-const MENU_ITEMS = [
+const SECONDARY_ITEMS = [
   { id: '/about', label: 'About' },
   { id: '/leaderboard', label: 'Leaderboard' },
   { id: '/privacy', label: 'Privacy Policy' },
 ]
 
 export default function BurgerMenu({ isOpen, onClose }: BurgerMenuProps) {
+  const location = useLocation()
   const navigate = useNavigate()
   const { user, logout } = useAuth()
   const { setPreferredVersion } = useDeviceType()
+
+  const isSignedIn = user && !user.isGuest
+
+  const mainNavItems = [
+    { id: '/', label: 'Home' },
+    { id: '/chat', label: 'Chat' },
+    { id: '/profile', label: isSignedIn ? 'Profile' : 'Sign In' },
+  ]
+
+  const isActive = (path: string) => {
+    if (path === '/') {
+      return location.pathname === '/' || location.pathname.startsWith('/game/')
+    }
+    return location.pathname === path
+  }
 
   const handleNavigation = (path: string) => {
     navigate(path)
@@ -45,11 +61,23 @@ export default function BurgerMenu({ isOpen, onClose }: BurgerMenuProps) {
         </div>
 
         <div className="mobile-menu-content">
-          <div className="mobile-menu-section">
-            {MENU_ITEMS.map((item) => (
+          <div className="mobile-menu-section mobile-menu-main-nav">
+            {mainNavItems.map((item) => (
               <button
                 key={item.id}
-                className="mobile-menu-item"
+                className={`mobile-menu-item ${isActive(item.id) ? 'active' : ''}`}
+                onClick={() => handleNavigation(item.id)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="mobile-menu-section">
+            {SECONDARY_ITEMS.map((item) => (
+              <button
+                key={item.id}
+                className={`mobile-menu-item ${isActive(item.id) ? 'active' : ''}`}
                 onClick={() => handleNavigation(item.id)}
               >
                 {item.label}
@@ -68,7 +96,7 @@ export default function BurgerMenu({ isOpen, onClose }: BurgerMenuProps) {
             </button>
           </div>
 
-          {user && !user.isGuest && (
+          {isSignedIn && (
             <div className="mobile-menu-section mobile-menu-footer">
               <button className="mobile-menu-item mobile-menu-logout" onClick={handleLogout}>
                 Log Out
