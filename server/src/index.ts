@@ -37,6 +37,25 @@ async function startServer() {
   const app = express()
   const httpServer = createServer(app)
 
+  // Graceful shutdown handler
+  const shutdown = (signal: string) => {
+    console.log(`\n${signal} received, shutting down gracefully...`)
+
+    httpServer.close(() => {
+      console.log('HTTP server closed')
+      process.exit(0)
+    })
+
+    // Force exit after 10 seconds if graceful shutdown fails
+    setTimeout(() => {
+      console.log('Forcing shutdown after timeout')
+      process.exit(0)
+    }, 10000)
+  }
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'))
+  process.on('SIGINT', () => shutdown('SIGINT'))
+
   const io = new Server(httpServer, {
     cors: {
       origin: process.env.NODE_ENV === 'production' ? false : ['http://localhost:5173'],
