@@ -914,11 +914,17 @@ export async function setupHexgridSocket(io: Server): Promise<void> {
   ioInstance = io
 
   io.on('connection', async (socket: Socket) => {
+    console.log('[HEXGRID] Socket connection attempt:', socket.id)
+
     // Authenticate socket
     const token = socket.handshake.auth?.token
+    console.log('[HEXGRID] Socket auth token present:', !!token)
+
     if (token) {
       try {
         const decoded = verifyToken(token)
+        console.log('[HEXGRID] Token decoded:', decoded ? 'success' : 'failed')
+
         if (decoded && typeof decoded === 'object' && 'userId' in decoded) {
           const userId = (decoded as any).userId
           const users = await query<{ id: number; username: string; avatar_color: string; avatar_image: string | null }>(
@@ -931,26 +937,33 @@ export async function setupHexgridSocket(io: Server): Promise<void> {
             ;(socket as any).username = user.username
             ;(socket as any).avatarColor = user.avatar_color
             ;(socket as any).avatarImage = user.avatar_image
+            console.log('[HEXGRID] User authenticated:', user.username)
           }
         }
       } catch (err) {
+        console.error('[HEXGRID] Token verification failed:', err)
         // Invalid token, continue as guest (but hexgrid requires auth)
       }
     }
 
     // Hexgrid event handlers
     socket.on('hexgrid:join', (data: { lobbyId: string }) => {
+      console.log('[HEXGRID] Join request from', socket.id, '- userId:', (socket as any).userId)
+
       // Only allow authenticated users
       if (!(socket as any).userId) {
+        console.log('[HEXGRID] Join rejected: not authenticated')
         socket.emit('hexgrid:error', { message: 'Authentication required' })
         return
       }
 
       if (mainLobby.realPlayerCount >= MAX_PLAYERS && !mainLobby.spectators.has(socket.id)) {
+        console.log('[HEXGRID] Join rejected: lobby full')
         socket.emit('hexgrid:error', { message: 'Lobby is full' })
         return
       }
 
+      console.log('[HEXGRID] Join accepted, handling join...')
       handleJoin(socket, data.lobbyId || 'main')
     })
 
