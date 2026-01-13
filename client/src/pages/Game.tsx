@@ -46,12 +46,14 @@ interface HighScoreData {
 export default function Game() {
   const { id } = useParams<{ id: string }>()
   const { user, token } = useAuth()
-  const { addTickerMessage } = useSocket()
+  const { addTickerMessage, tickerMessages } = useSocket()
   const [sessionId, setSessionId] = useState<number | null>(null)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [_sessionStatus, setSessionStatus] = useState<'idle' | 'starting' | 'playing' | 'ending' | 'error'>('idle')
   const sessionStartedRef = useRef(false)
   const initialGameStartIgnoredRef = useRef(false)
+  const tickerQueueRef = useRef(tickerMessages)
+  tickerQueueRef.current = tickerMessages
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const [highScoreData, setHighScoreData] = useState<HighScoreData | null>(null)
 
@@ -316,7 +318,10 @@ export default function Game() {
         updateSessionScore(sessionId, event.data.score, event.data.stats)
       }
       // Handle ticker messages from games
+      // Skip low priority messages when queue is not empty to reduce verbosity
       if (event.data?.type === 'TICKER_MESSAGE' && event.data?.game === id) {
+        const isLowPriority = event.data.priority === 'low'
+        if (isLowPriority && tickerQueueRef.current.length > 0) return
         addTickerMessage(event.data.message, event.data.level || 'info')
       }
       // Handle game restart - start a new session

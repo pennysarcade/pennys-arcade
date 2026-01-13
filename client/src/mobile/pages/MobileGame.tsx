@@ -34,11 +34,13 @@ export default function MobileGame() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { user, token } = useAuth()
-  const { addTickerMessage } = useSocket()
+  const { addTickerMessage, tickerMessages } = useSocket()
   const [sessionId, setSessionId] = useState<number | null>(null)
   const [sessionStatus, setSessionStatus] = useState<'idle' | 'starting' | 'playing' | 'ending' | 'error'>('idle')
   const sessionStartedRef = useRef(false)
   const initialGameStartIgnoredRef = useRef(false)
+  const tickerQueueRef = useRef(tickerMessages)
+  tickerQueueRef.current = tickerMessages
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const [highScoreData, setHighScoreData] = useState<HighScoreData | null>(null)
 
@@ -241,7 +243,10 @@ export default function MobileGame() {
       if (event.data?.type === 'SCORE_UPDATE' && event.data?.game === id && sessionId) {
         updateSessionScore(sessionId, event.data.score, event.data.stats)
       }
+      // Skip low priority messages when queue is not empty to reduce verbosity
       if (event.data?.type === 'TICKER_MESSAGE' && event.data?.game === id) {
+        const isLowPriority = event.data.priority === 'low'
+        if (isLowPriority && tickerQueueRef.current.length > 0) return
         addTickerMessage(event.data.message, event.data.level || 'info')
       }
       if (event.data?.type === 'GAME_START' && event.data?.game === id && id) {

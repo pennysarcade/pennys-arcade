@@ -1511,17 +1511,18 @@ const SystemMessages = {
     return Date.now() - lastTime >= this.MESSAGE_COOLDOWN;
   },
 
-  show(messageType, text, color = '#ffff00') {
+  show(messageType, text, priority = 'high') {
     if (!this.canShow(messageType)) return false;
     this.lastMessageTimes[messageType] = Date.now();
 
-    // Send to parent ticker
+    // Send to parent ticker with priority
     if (window.parent !== window) {
       window.parent.postMessage({
         type: 'TICKER_MESSAGE',
         game: 'onzac',
         message: text,
-        level: 'info'
+        level: 'info',
+        priority: priority
       }, '*');
     }
     return true;
@@ -1535,9 +1536,9 @@ const SystemMessages = {
     if (zombieCount > stats.peakZombieCount) {
       stats.peakZombieCount = zombieCount;
       if (zombieCount >= 50) {
-        this.show('peak_zombies_50', 'Zombie horde: 50+ incoming!', '#ff4444');
+        this.show('peak_zombies_50', '50+ zombies!');
       } else if (zombieCount >= 30) {
-        this.show('peak_zombies_30', '30 zombies on screen!', '#ff8844');
+        this.show('peak_zombies_30', '30 zombies!', 'low');
       }
     }
 
@@ -1545,7 +1546,7 @@ const SystemMessages = {
     if (zombieCount === 0 && stats.peakZombieCount > 10) {
       stats.screenClearCount++;
       if (stats.screenClearCount === 1) {
-        this.show('screen_clear', 'Screen clear!', '#00ff00');
+        this.show('screen_clear', 'Screen clear!');
       }
     }
 
@@ -1553,13 +1554,13 @@ const SystemMessages = {
     if (turretEnergy <= 5) {
       stats.energyDepletedCount++;
       if (stats.energyDepletedCount === 1) {
-        this.show('energy_depleted', 'Energy depleted!', '#ff4400');
+        this.show('energy_depleted', 'Energy depleted!');
       }
     }
     if (turretEnergy >= maxEnergy * 0.95) {
       stats.timeAtMaxEnergy++;
       if (stats.timeAtMaxEnergy >= 300) { // 5 seconds
-        this.show('max_energy_idle', 'Full energy - fire away!', '#00ffff');
+        this.show('max_energy_idle', 'Full energy', 'low');
         stats.timeAtMaxEnergy = 0;
       }
     } else {
@@ -1568,85 +1569,85 @@ const SystemMessages = {
 
     // Time milestones
     if (elapsedSeconds === 60) {
-      this.show('survived_60', 'One minute survived!', '#00ffff');
+      this.show('survived_60', '1 min survived');
     } else if (elapsedSeconds === 120) {
-      this.show('survived_120', 'Two minutes - impressive!', '#00ff88');
+      this.show('survived_120', '2 mins survived');
     } else if (elapsedSeconds === 180) {
-      this.show('survived_180', 'Three minutes!', '#ffff00');
+      this.show('survived_180', '3 mins!');
     }
 
     // Kill milestones
     if (gameState.zombiesKilled === 50) {
-      this.show('kills_50', '50 zombies eliminated!', '#00ffff');
+      this.show('kills_50', '50 kills!', 'low');
     } else if (gameState.zombiesKilled === 100) {
-      this.show('kills_100', '100 kills!', '#ffff00');
+      this.show('kills_100', '100 kills!');
     } else if (gameState.zombiesKilled === 200) {
-      this.show('kills_200', '200 kills - exterminator!', '#ff00ff');
+      this.show('kills_200', '200 kills!');
     }
 
     // Score milestones
     if (gameState.score >= 5000 && !this.lastMessageTimes['score_5000']) {
-      this.show('score_5000', '5,000 points!', '#ffff00');
+      this.show('score_5000', '5K points!');
     } else if (gameState.score >= 2000 && !this.lastMessageTimes['score_2000']) {
-      this.show('score_2000', '2,000 points!', '#00ffff');
+      this.show('score_2000', '2K points!', 'low');
     }
 
     // Survivor status
     if (survivorCount === 12 && elapsedSeconds >= 60) {
-      this.show('all_survivors_60', 'All 12 survivors still alive!', '#00ff00');
+      this.show('all_survivors_60', 'All 12 alive!');
     } else if (survivorCount === 6 && !this.lastMessageTimes['half_survivors']) {
-      this.show('half_survivors', 'Down to 6 survivors...', '#ffaa00');
+      this.show('half_survivors', '6 survivors left');
     } else if (survivorCount === 1 && !stats.lastSurvivorWarned) {
-      this.show('last_survivor', 'Last survivor - protect them!', '#ff0000');
+      this.show('last_survivor', 'Last survivor!');
       stats.lastSurvivorWarned = true;
     }
 
     // Kill burst tracking (reset after 1 second of no kills)
     if (Date.now() - stats.lastKillTime > 1000) {
       if (stats.killBurstCount >= 5) {
-        this.show('kill_burst', `Massacre: ${stats.killBurstCount} rapid kills!`, '#ff00ff');
+        this.show('kill_burst', `${stats.killBurstCount} rapid kills!`);
       }
       stats.killBurstCount = 0;
     }
 
     // Weapon usage milestones
     if (stats.weaponKills.flame === 50) {
-      this.show('flame_50', 'Flamethrower: 50 kills!', '#ff4400');
+      this.show('flame_50', 'Flame: 50 kills', 'low');
     }
     if (stats.weaponKills.lightning === 20) {
-      this.show('lightning_20', 'Chain lightning: 20 kills!', '#8888ff');
+      this.show('lightning_20', 'Lightning: 20 kills', 'low');
     }
     if (stats.weaponKills.ball === 30) {
-      this.show('ball_30', 'Ball cannon: 30 kills!', '#00ffff');
+      this.show('ball_30', 'Cannon: 30 kills', 'low');
     }
 
     // Weapon switch spam
     if (stats.weaponSwitches >= 15) {
-      this.show('switch_spam', "Can't decide on a weapon?", '#888888');
+      this.show('switch_spam', 'Indecisive?', 'low');
       stats.weaponSwitches = 0;
     }
 
     // Tank kills
     if (stats.tankKills === 1) {
-      this.show('first_tank', 'First tank down!', '#880000');
+      this.show('first_tank', 'Tank down!');
     } else if (stats.tankKills === 5) {
-      this.show('tanks_5', '5 tanks eliminated!', '#ff4400');
+      this.show('tanks_5', '5 tanks!', 'low');
     }
 
     // Fast zombie kills
     if (stats.fastKills === 10) {
-      this.show('fast_10', '10 speedsters eliminated!', '#ffaa00');
+      this.show('fast_10', '10 fast zombies', 'low');
     }
 
     // Black hole stats
     if (stats.blackHoleKills >= 15) {
-      this.show('blackhole_15', `Black hole consumed ${stats.blackHoleKills} zombies!`, '#8800ff');
+      this.show('blackhole_15', `Black hole: ${stats.blackHoleKills}!`);
       stats.blackHoleKills = 0;
     }
 
     // Lightning chain achievement
     if (stats.lightningChainMax === 4) {
-      this.show('perfect_chain', 'Perfect 4-chain lightning!', '#8888ff');
+      this.show('perfect_chain', '4-chain lightning!');
     }
   },
 
@@ -1681,17 +1682,17 @@ const SystemMessages = {
 
     if (type === 'nuke') {
       if (zombieCount <= 1) {
-        this.show('nuke_overkill', 'Overkill much?', '#888888');
+        this.show('nuke_overkill', 'Overkill?', 'low');
       } else if (zombieCount >= 20) {
-        this.show('nuke_massive', `NUKE: ${zombieCount} zombies vaporized!`, '#ff0000');
+        this.show('nuke_massive', `NUKE: ${zombieCount}!`);
       }
     }
 
     const count = stats.powerUpsCollected[type];
     if (type === 'slowmo' && count === 1) {
-      this.show('first_slowmo', 'Slow-mo activated!', '#ffff00');
+      this.show('first_slowmo', 'Slow-mo!');
     } else if (type === 'nuke' && count === 3) {
-      this.show('nuke_3', 'Nuclear enthusiast!', '#ff0000');
+      this.show('nuke_3', '3 nukes used', 'low');
     }
   },
 
@@ -1700,7 +1701,7 @@ const SystemMessages = {
     this.stats.survivorsLost++;
 
     if (this.stats.survivorsLost === 1) {
-      this.show('first_casualty', 'First casualty...', '#ff4400');
+      this.show('first_casualty', 'First casualty');
     }
   },
 
@@ -1708,7 +1709,7 @@ const SystemMessages = {
   onSurvivorCloseCall() {
     this.stats.survivorCloseCallCount++;
     if (this.stats.survivorCloseCallCount % 3 === 1) {
-      this.show('survivor_close', 'Close call on survivor!', '#ffaa00');
+      this.show('survivor_close', 'Survivor close call', 'low');
     }
   },
 
@@ -1721,7 +1722,7 @@ const SystemMessages = {
   onBlackHoleDeployed() {
     this.stats.blackHolesDeployed++;
     if (this.stats.blackHolesDeployed === 1) {
-      this.show('first_blackhole', 'Black hole deployed!', '#8800ff');
+      this.show('first_blackhole', 'Black hole!');
     }
   },
 

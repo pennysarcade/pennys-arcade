@@ -838,17 +838,18 @@ const SystemMessages = {
         return Date.now() - lastTime >= this.MESSAGE_COOLDOWN;
     },
 
-    show(messageType, text, color = '#ffff00') {
+    show(messageType, text, priority = 'high') {
         if (!this.canShow(messageType)) return false;
         this.lastMessageTimes[messageType] = Date.now();
 
-        // Send to parent ticker
+        // Send to parent ticker with priority
         if (window.parent !== window) {
             window.parent.postMessage({
                 type: 'TICKER_MESSAGE',
                 game: 'tessles',
                 message: text,
-                level: 'info'
+                level: 'info',
+                priority: priority
             }, '*');
         }
         return true;
@@ -862,18 +863,18 @@ const SystemMessages = {
         if (circleCount > stats.peakEnemyCount) {
             stats.peakEnemyCount = circleCount;
             if (circleCount >= 75) {
-                this.show('peak_enemies_75', 'Chaos mode: 75+ enemies!', '#ff4444');
+                this.show('peak_enemies_75', '75+ enemies!');
             } else if (circleCount >= 50) {
-                this.show('peak_enemies_50', '50 enemies on screen!', '#ff8844');
+                this.show('peak_enemies_50', '50 enemies!', 'low');
             }
         }
 
         // Track time without power-up
         const timeSincePowerUp = (Date.now() - stats.lastPowerUpTime) / 1000;
         if (timeSincePowerUp >= 90 && elapsedSeconds >= 90) {
-            this.show('no_powerup_90', '90 seconds without a power-up!', '#ff00ff');
+            this.show('no_powerup_90', '90s no power-ups', 'low');
         } else if (timeSincePowerUp >= 60 && elapsedSeconds >= 60) {
-            this.show('no_powerup_60', 'No power-ups for a minute - purist?', '#ffaa00');
+            this.show('no_powerup_60', '60s no power-ups', 'low');
         }
 
         // Track player idle time
@@ -882,7 +883,7 @@ const SystemMessages = {
         if (dx < 2 && dy < 2 && circleCount > 10) {
             stats.playerIdleFrames++;
             if (stats.playerIdleFrames >= 300) { // 5 seconds at 60fps
-                this.show('player_idle', 'Frozen with fear?', '#aaaaaa');
+                this.show('player_idle', 'Frozen?', 'low');
                 stats.playerIdleFrames = 0;
             }
         } else {
@@ -893,78 +894,69 @@ const SystemMessages = {
 
         // Time milestones
         if (elapsedSeconds === 60) {
-            this.show('survived_60', 'One minute survived!', '#00ffff');
+            this.show('survived_60', '1 min survived');
         } else if (elapsedSeconds === 120) {
-            this.show('survived_120', 'Two minutes - impressive!', '#00ff88');
+            this.show('survived_120', '2 mins survived');
         } else if (elapsedSeconds === 180) {
-            this.show('survived_180', 'Three minutes - legendary!', '#ffff00');
+            this.show('survived_180', '3 mins!');
         } else if (elapsedSeconds === 300) {
-            this.show('survived_300', 'FIVE MINUTES?!', '#ff00ff');
+            this.show('survived_300', '5 MINS!');
         }
 
         // Score milestones
         if (score >= 10000 && !this.lastMessageTimes['score_10000']) {
-            this.show('score_10000', '10,000 points!', '#ffff00');
+            this.show('score_10000', '10K points!');
         } else if (score >= 5000 && !this.lastMessageTimes['score_5000']) {
-            this.show('score_5000', '5,000 points!', '#00ffff');
+            this.show('score_5000', '5K points!');
         } else if (score >= 2500 && !this.lastMessageTimes['score_2500']) {
-            this.show('score_2500', '2,500 points!', '#00ff88');
+            this.show('score_2500', '2.5K points!', 'low');
         }
 
         // Wave milestones
         if (waveNumber === 5) {
-            this.show('waves_5', '5 waves survived!', '#00ffff');
+            this.show('waves_5', '5 waves!', 'low');
         } else if (waveNumber === 10) {
-            this.show('waves_10', '10 waves - unstoppable!', '#ffff00');
-        }
-
-        // Combo near-miss
-        if (combo >= 20 && combo < 25 && Date.now() - lastNearMissTime > 1500) {
-            this.show('combo_almost_25', 'So close to 25x combo...', '#ff8800');
-        } else if (combo >= 45 && combo < 50 && Date.now() - lastNearMissTime > 1500) {
-            this.show('combo_almost_50', 'Almost 50x! Keep it up!', '#ff00ff');
+            this.show('waves_10', '10 waves!');
         }
 
         // High combo achievements
         if (maxCombo === 25) {
-            this.show('combo_25', '25x COMBO!', '#ff00ff');
+            this.show('combo_25', '25x COMBO!');
         } else if (maxCombo === 50) {
-            this.show('combo_50', '50x COMBO - INCREDIBLE!', '#ffff00');
+            this.show('combo_50', '50x COMBO!');
         } else if (maxCombo === 100) {
-            this.show('combo_100', '100x COMBO - IMPOSSIBLE!', '#ff0000');
+            this.show('combo_100', '100x COMBO!');
         }
 
         // Dash stats
         if (stats.totalDashes === 10) {
-            this.show('dashes_10', '10 dashes used!', '#ff00ff');
+            this.show('dashes_10', '10 dashes', 'low');
         }
         if (stats.dashesWithNoEnemiesNearby >= 3) {
-            this.show('shadow_boxing', 'Shadow boxing?', '#888888');
+            this.show('shadow_boxing', 'Shadow boxing?', 'low');
             stats.dashesWithNoEnemiesNearby = 0;
         }
 
-        // Shield meltdown - tracked separately when shields are lost
-
         // Boss defeated count
         if (stats.bossesDefeated === 1) {
-            this.show('boss_first', 'Boss wave survived!', '#ff00ff');
+            this.show('boss_first', 'Boss defeated!');
         } else if (stats.bossesDefeated === 3) {
-            this.show('boss_3', '3 bosses down!', '#ffff00');
+            this.show('boss_3', '3 bosses down!');
         }
 
         // Perfect waves (no hits taken during wave)
         if (stats.wavesWithoutHit === 3) {
-            this.show('perfect_waves_3', '3 waves without a scratch!', '#00ff00');
+            this.show('perfect_waves_3', '3 flawless waves!');
         }
 
         // Fury rampage
         if (stats.furyKills >= 10) {
-            this.show('fury_rampage', `Fury rampage: ${stats.furyKills} kills!`, '#ff0000');
+            this.show('fury_rampage', `Fury: ${stats.furyKills} kills!`);
         }
 
         // Danger zone time
         if (stats.dangerZoneTime >= 900) { // 15 seconds at 60fps
-            this.show('danger_zone_15', 'Danger zone thrill seeker!', '#ffaa00');
+            this.show('danger_zone_15', 'Edge runner!', 'low');
         }
     },
 
@@ -977,11 +969,11 @@ const SystemMessages = {
         const count = stats.powerUpsCollected[type];
 
         if (type === 'FURY' && count === 1) {
-            this.show('first_fury', 'FURY MODE ACTIVATED!', '#ff0000');
+            this.show('first_fury', 'FURY MODE!');
         } else if (type === 'BOMB' && count === 5) {
-            this.show('bomb_5', 'Bomb enthusiast: 5 collected!', '#ff4400');
+            this.show('bomb_5', '5 bombs collected', 'low');
         } else if (type === 'SHIELD' && count === 10) {
-            this.show('shield_10', '10 shields collected!', '#00ff00');
+            this.show('shield_10', '10 shields', 'low');
         }
     },
 
@@ -991,9 +983,9 @@ const SystemMessages = {
         stats.dashKills++;
 
         if (stats.dashKills === 1) {
-            this.show('first_dash_kill', 'Dash kill! Risky but effective.', '#ff00ff');
+            this.show('first_dash_kill', 'Dash kill!');
         } else if (stats.dashKills === 5) {
-            this.show('dash_kills_5', '5 dash kills - aggressive!', '#ff00ff');
+            this.show('dash_kills_5', '5 dash kills', 'low');
         }
     },
 
@@ -1009,15 +1001,12 @@ const SystemMessages = {
         stats.lastWaveHitsTaken++;
 
         if (stats.shieldHits === 1) {
-            this.show('first_shield_hit', 'Shield saved your life!', '#00ff00');
+            this.show('first_shield_hit', 'Shield saved you!');
         }
 
         // Track rapid shield loss
         if (remainingShields === 0 && stats.shieldHits >= 3) {
-            const recentHits = stats.shieldHits;
-            if (recentHits >= 3) {
-                this.show('shield_meltdown', 'Shield meltdown!', '#ff4400');
-            }
+            this.show('shield_meltdown', 'Shields gone!');
         }
     },
 
@@ -1026,9 +1015,9 @@ const SystemMessages = {
         this.stats.bombKills += killCount;
 
         if (killCount >= 15) {
-            this.show('bomb_mega', `MEGA BOMB: ${killCount} eliminated!`, '#ff4400');
+            this.show('bomb_mega', `MEGA BOMB: ${killCount}!`);
         } else if (killCount >= 10) {
-            this.show('bomb_big', `Big boom: ${killCount} enemies!`, '#ffaa00');
+            this.show('bomb_big', `Bomb: ${killCount} kills`, 'low');
         }
     },
 
@@ -1037,14 +1026,14 @@ const SystemMessages = {
         this.stats.mineKills++;
 
         if (this.stats.mineKills === 5) {
-            this.show('mine_5', 'Mine field: 5 kills!', '#ffaa00');
+            this.show('mine_5', '5 mine kills', 'low');
         }
     },
 
     // Called when player has extremely close near-miss
     onExtremeNearMiss(intensity) {
         if (intensity > 0.95) {
-            this.show('extreme_near_miss', "Hair's breadth escape!", '#ffff00');
+            this.show('extreme_near_miss', 'Close call!');
         }
     },
 
@@ -1082,7 +1071,7 @@ const SystemMessages = {
     onSplitterSpawn() {
         this.stats.splitterSpawns++;
         if (this.stats.splitterSpawns === 1) {
-            this.show('first_splitter', 'Splitter spawned more!', '#00ff00');
+            this.show('first_splitter', 'Splitter split!', 'low');
         }
     },
 };
