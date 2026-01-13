@@ -7,7 +7,6 @@ export default function MobileHome() {
   return (
     <div className="mobile-home">
       <section className="mobile-home-section">
-        <h2 className="mobile-section-title">Games</h2>
         <MobileGameRow />
       </section>
 

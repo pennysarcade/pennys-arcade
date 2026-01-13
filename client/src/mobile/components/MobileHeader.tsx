@@ -7,7 +7,7 @@ interface MobileHeaderProps {
 const NAV_ITEMS = [
   { id: '/', label: 'Home' },
   { id: '/chat', label: 'Chat' },
-  { id: '/profile', label: 'Profile' },
+  { id: '/profile', label: 'Sign in' },
 ]
 
 export default function MobileHeader({ onMenuToggle }: MobileHeaderProps) {

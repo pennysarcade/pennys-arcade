@@ -51,6 +51,8 @@
 .mobile-logo-img {
   width: 36px;
   height: 36px;
+  border: 2px solid var(--neon-magenta);
+  border-radius: 4px;
 }
 
 .mobile-header-nav {
