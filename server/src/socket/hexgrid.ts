@@ -419,15 +419,13 @@ function checkCollisions(gameState: HexGameState): PlayerEliminatedData[] {
   for (const [playerId, player] of gameState.players) {
     if (!player.isAlive) continue
 
-    // Check boundary collision
+    // Check boundary collision - just stop movement, don't kill
     if (!isInBounds(player.position, gameState.gridSize)) {
-      player.isAlive = false
-      eliminations.push({
-        playerId,
-        eliminatedBy: null,
-        playerUsername: player.username,
-        eliminatorUsername: null,
-      })
+      // Move back to previous position (undo the move)
+      if (player.trail.length > 0) {
+        player.position = player.trail.pop()!
+      }
+      player.direction = null // Stop moving
       continue
     }
 

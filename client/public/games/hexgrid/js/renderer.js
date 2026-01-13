@@ -19,6 +19,11 @@ export class HexRenderer {
         this.playerPositions = new Map(); // playerId -> { prev: {q,r}, current: {q,r}, lastUpdate: timestamp }
         this.interpolationDuration = 400; // ms to interpolate between positions
 
+        // Path preview state
+        this.previewDirection = null;
+        this.localPlayerId = null;
+        this.gridSizeForBounds = 7;
+
         // Pre-calculate grid hexes
         this.gridHexes = [];
 
@@ -49,7 +54,27 @@ export class HexRenderer {
 
     setGridSize(size) {
         this.gridSize = size;
+        this.gridSizeForBounds = size;
         this.resize();
+    }
+
+    // Set the preview direction for path drawing
+    setPreviewDirection(direction) {
+        this.previewDirection = direction;
+    }
+
+    // Get pixel position for a hex coordinate
+    getPlayerPixelPosition(hexPos) {
+        if (!hexPos) return null;
+        return hexToPixel(hexPos.q, hexPos.r, this.hexSize, this.centerX, this.centerY);
+    }
+
+    // Check if hex is in bounds
+    isHexInBounds(hex) {
+        const s = -hex.q - hex.r;
+        return Math.abs(hex.q) <= this.gridSizeForBounds &&
+               Math.abs(hex.r) <= this.gridSizeForBounds &&
+               Math.abs(s) <= this.gridSizeForBounds;
     }
 
     // Update player position for interpolation
@@ -327,6 +352,72 @@ export class HexRenderer {
         this.ctx.restore();
     }
 
+    // Draw path preview showing where player will go
+    drawPathPreview(playerPos, direction, color) {
+        if (!direction || !playerPos) return;
+
+        const dirVectors = {
+            NE: { q: 1, r: -1 },
+            E:  { q: 1, r: 0 },
+            SE: { q: 0, r: 1 },
+            SW: { q: -1, r: 1 },
+            W:  { q: -1, r: 0 },
+            NW: { q: 0, r: -1 }
+        };
+
+        const dir = dirVectors[direction];
+        if (!dir) return;
+
+        // Draw preview hexes along the path (up to 5 hexes or until boundary)
+        const previewHexes = [];
+        let currentHex = { q: playerPos.q, r: playerPos.r };
+
+        for (let i = 0; i < 5; i++) {
+            const nextHex = {
+                q: currentHex.q + dir.q,
+                r: currentHex.r + dir.r
+            };
+
+            if (!this.isHexInBounds(nextHex)) break;
+
+            previewHexes.push(nextHex);
+            currentHex = nextHex;
+        }
+
+        // Draw preview path with fading opacity
+        this.ctx.save();
+        for (let i = 0; i < previewHexes.length; i++) {
+            const hex = previewHexes[i];
+            const opacity = 0.4 - (i * 0.07);
+            const pos = hexToPixel(hex.q, hex.r, this.hexSize, this.centerX, this.centerY);
+            const corners = getHexCorners(pos.x, pos.y, this.hexSize * 0.95);
+
+            this.ctx.beginPath();
+            this.ctx.moveTo(corners[0].x, corners[0].y);
+            for (let j = 1; j < 6; j++) {
+                this.ctx.lineTo(corners[j].x, corners[j].y);
+            }
+            this.ctx.closePath();
+
+            this.ctx.fillStyle = color + Math.floor(opacity * 255).toString(16).padStart(2, '0');
+            this.ctx.fill();
+
+            this.ctx.strokeStyle = color;
+            this.ctx.lineWidth = 2;
+            this.ctx.setLineDash([4, 4]);
+            this.ctx.stroke();
+            this.ctx.setLineDash([]);
+        }
+        this.ctx.restore();
+
+        // Draw arrow at the end of preview path
+        if (previewHexes.length > 0) {
+            const lastHex = previewHexes[previewHexes.length - 1];
+            const lastPos = hexToPixel(lastHex.q, lastHex.r, this.hexSize, this.centerX, this.centerY);
+            this.drawDirectionArrow(lastPos.x, lastPos.y, this.hexSize * 0.3, direction, color);
+        }
+    }
+
     // Draw direction arrow
     drawDirectionArrow(x, y, radius, direction, color) {
         const dirVectors = {
@@ -540,7 +631,15 @@ export class HexRenderer {
         const localPlayer = gameState.players.find(p => p.id === localPlayerId);
         if (localPlayer && localPlayer.isAlive) {
             this.drawPlayer(localPlayer, true);
+
+            // Draw path preview for local player
+            if (this.previewDirection) {
+                this.drawPathPreview(localPlayer.position, this.previewDirection, localPlayer.avatarColor);
+            }
         }
+
+        // Store local player id for input handling
+        this.localPlayerId = localPlayerId;
 
         // Draw particles on top
         this.drawParticles();

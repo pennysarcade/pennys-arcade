@@ -436,104 +436,89 @@ function handleError(data) {
     showError(data.message);
 }
 
-// Input handling
+// Input handling - cursor-based with path preview
+let previewDirection = null;
+
+function getDirectionToPoint(playerPos, targetX, targetY) {
+    if (!playerPos) return null;
+
+    // Get player's pixel position
+    const playerPixel = renderer.getPlayerPixelPosition(playerPos);
+    if (!playerPixel) return null;
+
+    const dx = targetX - playerPixel.x;
+    const dy = targetY - playerPixel.y;
+
+    // Need minimum distance to determine direction
+    if (Math.sqrt(dx * dx + dy * dy) < 20) return null;
+
+    return getDirectionFromDelta(dx, dy);
+}
+
+function getLocalPlayerPosition() {
+    if (!localPlayerId || !gameState.players) return null;
+    const localPlayer = gameState.players.find(p => p.id === localPlayerId);
+    return localPlayer ? localPlayer.position : null;
+}
+
 function setupInput() {
-    // Keyboard input
-    document.addEventListener('keydown', (e) => {
+    // Mouse move - update preview direction
+    canvas.addEventListener('mousemove', (e) => {
         if (!socket || gameState.status !== 'playing' || isSpectator) return;
 
-        let direction = null;
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
 
-        // Arrow keys and WASD
-        // For hex grid, we map keys to 6 directions
-        switch (e.key) {
-            case 'ArrowRight':
-            case 'd':
-            case 'D':
-                direction = 'E';
-                break;
-            case 'ArrowLeft':
-            case 'a':
-            case 'A':
-                direction = 'W';
-                break;
-            case 'ArrowUp':
-            case 'w':
-            case 'W':
-                // Up could be NE or NW, let's use NE
-                direction = 'NE';
-                break;
-            case 'ArrowDown':
-            case 's':
-            case 'S':
-                // Down could be SE or SW, let's use SW
-                direction = 'SW';
-                break;
-            case 'q':
-            case 'Q':
-                direction = 'NW';
-                break;
-            case 'e':
-            case 'E':
-                direction = 'NE';
-                break;
-            case 'z':
-            case 'Z':
-                direction = 'SW';
-                break;
-            case 'c':
-            case 'C':
-                direction = 'SE';
-                break;
-        }
+        const playerPos = getLocalPlayerPosition();
+        previewDirection = getDirectionToPoint(playerPos, x, y);
+        renderer.setPreviewDirection(previewDirection);
+    });
+
+    // Mouse click - confirm direction
+    canvas.addEventListener('click', (e) => {
+        if (!socket || gameState.status !== 'playing' || isSpectator) return;
+
+        AudioSystem.init();
+
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        const playerPos = getLocalPlayerPosition();
+        const direction = getDirectionToPoint(playerPos, x, y);
 
         if (direction && HEX_DIRECTIONS[direction]) {
-            e.preventDefault();
             socket.emit('hexgrid:move', { direction });
-            AudioSystem.init();
             AudioSystem.playMove();
         }
     });
 
-    // Touch input for mobile
-    if (isMobileMode) {
-        let touchStartX = 0;
-        let touchStartY = 0;
-        let touchStartTime = 0;
+    // Touch input for mobile - tap to set direction
+    canvas.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        AudioSystem.init();
 
-        canvas.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            AudioSystem.init();
+        if (!socket || gameState.status !== 'playing' || isSpectator) return;
 
-            const touch = e.touches[0];
-            touchStartX = touch.clientX;
-            touchStartY = touch.clientY;
-            touchStartTime = Date.now();
-        }, { passive: false });
+        const touch = e.touches[0];
+        const rect = canvas.getBoundingClientRect();
+        const x = touch.clientX - rect.left;
+        const y = touch.clientY - rect.top;
 
-        canvas.addEventListener('touchend', (e) => {
-            e.preventDefault();
+        const playerPos = getLocalPlayerPosition();
+        const direction = getDirectionToPoint(playerPos, x, y);
 
-            if (!socket || gameState.status !== 'playing' || isSpectator) return;
+        if (direction && HEX_DIRECTIONS[direction]) {
+            socket.emit('hexgrid:move', { direction });
+            AudioSystem.playMove();
+        }
+    }, { passive: false });
 
-            const touch = e.changedTouches[0];
-            const dx = touch.clientX - touchStartX;
-            const dy = touch.clientY - touchStartY;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            const duration = Date.now() - touchStartTime;
-
-            // Require minimum swipe distance and speed
-            if (distance > 30 && duration < 500) {
-                const direction = getDirectionFromDelta(dx, dy);
-                socket.emit('hexgrid:move', { direction });
-                AudioSystem.playMove();
-            }
-        }, { passive: false });
-
-        canvas.addEventListener('touchmove', (e) => {
-            e.preventDefault();
-        }, { passive: false });
-    }
+    // Prevent scrolling on touch
+    canvas.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+    }, { passive: false });
 }
 
 // Game loop
