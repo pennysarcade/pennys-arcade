@@ -76,6 +76,14 @@ export default function BurgerMenu({ isOpen, onClose }: BurgerMenuProps) {
                 {item.label}
               </button>
             ))}
+            {user?.isAdmin && (
+              <button
+                className={`mobile-menu-item mobile-menu-admin ${location.pathname === '/admin' ? 'active' : ''}`}
+                onClick={() => handleNavigation('/admin')}
+              >
+                Admin Panel
+              </button>
+            )}
           </div>
 
           <div className="mobile-menu-section">

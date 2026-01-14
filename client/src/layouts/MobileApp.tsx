@@ -6,6 +6,7 @@ import MobileHome from '../mobile/pages/MobileHome'
 import MobileChat from '../mobile/pages/MobileChat'
 import MobileGame from '../mobile/pages/MobileGame'
 import MobileProfile from '../mobile/pages/MobileProfile'
+import MobileAdmin from '../mobile/pages/MobileAdmin'
 import About from '../pages/About'
 import Leaderboard from '../pages/Leaderboard'
 import Privacy from '../pages/Privacy'
@@ -25,6 +26,7 @@ export default function MobileApp() {
           <Route path="/game/:id" element={<MobileGame />} />
           <Route path="/:id" element={<MobileGame />} />
           <Route path="/profile" element={<MobileProfile />} />
+          <Route path="/admin" element={<MobileAdmin />} />
           <Route path="/about" element={<About />} />
           <Route path="/leaderboard" element={<Leaderboard />} />
           <Route path="/roadmap" element={<Navigate to="/about" replace />} />
