@@ -818,17 +818,23 @@ export default function Admin() {
                           )}
                         </td>
                         <td>
-                          {u.activeSession ? (
-                            <span
-                              className="game-page-with-score"
-                              title={`Score: ${u.activeSession.score.toLocaleString()}${u.activeSession.stats ? `\nStats: ${u.activeSession.stats}` : ''}\nStarted: ${new Date(u.activeSession.started_at).toLocaleTimeString()}`}
-                            >
-                              {formatPage(u.currentPage)}
-                              <span className="game-score-badge">{u.activeSession.score.toLocaleString()}</span>
-                            </span>
-                          ) : (
-                            formatPage(u.currentPage)
-                          )}
+                          {(() => {
+                            // Check if user is on a game page
+                            const isOnGamePage = u.currentPage.startsWith('/game/') || GAMES.some(g => u.currentPage === `/${g.id}`)
+                            const showScore = u.activeSession && isOnGamePage
+
+                            return showScore ? (
+                              <span
+                                className="game-page-with-score"
+                                title={`Score: ${u.activeSession!.score.toLocaleString()}${u.activeSession!.stats ? `\nStats: ${u.activeSession!.stats}` : ''}\nStarted: ${new Date(u.activeSession!.started_at).toLocaleTimeString()}`}
+                              >
+                                {formatPage(u.currentPage)}
+                                <span className="game-score-badge">{u.activeSession!.score.toLocaleString()}</span>
+                              </span>
+                            ) : (
+                              formatPage(u.currentPage)
+                            )
+                          })()}
                         </td>
                         <td className="muted-text">{formatDuration(u.connectedAt)}</td>
                       </tr>
