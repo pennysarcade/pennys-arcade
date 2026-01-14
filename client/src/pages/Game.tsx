@@ -328,9 +328,14 @@ export default function Game() {
         if (isLowPriority && tickerQueueRef.current.length > 0) return
         addTickerMessage(event.data.message, event.data.level || 'info')
       }
-      // Handle game restart - start a new session
-      // Ignore the first GAME_START (initial load) since useEffect handles that
+      // Handle game start/restart
       if (event.data?.type === 'GAME_START' && event.data?.game === id && id) {
+        // Always emit game:start for admin tracking (rounds counter)
+        if (socket) {
+          socket.emit('game:start', { gameId: id })
+        }
+
+        // Ignore the first GAME_START for session handling (useEffect handles initial session)
         if (!initialGameStartIgnoredRef.current) {
           console.log('[SESSION] Ignoring initial GAME_START (useEffect handles this)')
           initialGameStartIgnoredRef.current = true

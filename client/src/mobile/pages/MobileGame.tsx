@@ -260,6 +260,12 @@ export default function MobileGame() {
         addTickerMessage(event.data.message, event.data.level || 'info')
       }
       if (event.data?.type === 'GAME_START' && event.data?.game === id && id) {
+        // Always emit game:start for admin tracking (rounds counter)
+        if (socket) {
+          socket.emit('game:start', { gameId: id })
+        }
+
+        // Ignore the first GAME_START for session handling
         if (!initialGameStartIgnoredRef.current) {
           initialGameStartIgnoredRef.current = true
           return

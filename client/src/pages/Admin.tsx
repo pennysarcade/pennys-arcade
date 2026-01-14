@@ -101,6 +101,7 @@ interface CurrentGameInfo {
   score: number
   stats: string | null
   startedAt: number
+  rounds: number
 }
 
 interface ConnectedUser {
@@ -824,16 +825,28 @@ export default function Admin() {
                             const gameInfo = u.currentGame
                             const showScore = gameInfo !== null
 
-                            return showScore ? (
+                            if (!showScore) return formatPage(u.currentPage)
+
+                            // Calculate play duration
+                            const playDurationSec = Math.floor((Date.now() - gameInfo!.startedAt) / 1000)
+                            const playMins = Math.floor(playDurationSec / 60)
+                            const playSecs = playDurationSec % 60
+                            const playTimeStr = playMins > 0 ? `${playMins}m ${playSecs}s` : `${playSecs}s`
+
+                            const tooltipLines = [
+                              `Score: ${gameInfo!.score.toLocaleString()}`,
+                              `Playing: ${playTimeStr}`,
+                              `Rounds: ${gameInfo!.rounds}`
+                            ]
+
+                            return (
                               <span
                                 className="game-page-with-score"
-                                title={`Score: ${gameInfo!.score.toLocaleString()}${gameInfo!.stats ? `\nStats: ${gameInfo!.stats}` : ''}\nStarted: ${new Date(gameInfo!.startedAt).toLocaleTimeString()}`}
+                                title={tooltipLines.join('\n')}
                               >
                                 {formatPage(u.currentPage)}
                                 <span className="game-score-badge">{gameInfo!.score.toLocaleString()}</span>
                               </span>
-                            ) : (
-                              formatPage(u.currentPage)
                             )
                           })()}
                         </td>

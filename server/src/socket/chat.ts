@@ -250,6 +250,7 @@ interface CurrentGameInfo {
   score: number
   stats: string | null
   startedAt: number
+  rounds: number
 }
 
 interface ConnectedUser {
@@ -943,18 +944,39 @@ export async function setupChatSocket(io: Server) {
       }
     })
 
+    // Handle game start (for tracking rounds/restarts)
+    socket.on('game:start', (data: { gameId: string }) => {
+      const user = connectedUsers.get(socket.id)
+      if (user && data.gameId) {
+        const now = Date.now()
+        const isSameGame = user.currentGame?.gameId === data.gameId
+        connectedUsers.set(socket.id, {
+          ...user,
+          currentGame: {
+            gameId: data.gameId,
+            score: 0,
+            stats: null,
+            startedAt: isSameGame ? user.currentGame!.startedAt : now,
+            rounds: isSameGame ? user.currentGame!.rounds + 1 : 1
+          }
+        })
+      }
+    })
+
     // Handle game score updates (for real-time score display in admin)
     socket.on('game:scoreUpdate', (data: { gameId: string; score: number; stats?: string }) => {
       const user = connectedUsers.get(socket.id)
       if (user && data.gameId) {
         const now = Date.now()
+        const isSameGame = user.currentGame?.gameId === data.gameId
         connectedUsers.set(socket.id, {
           ...user,
           currentGame: {
             gameId: data.gameId,
             score: data.score || 0,
             stats: data.stats || null,
-            startedAt: user.currentGame?.gameId === data.gameId ? user.currentGame.startedAt : now
+            startedAt: isSameGame ? user.currentGame!.startedAt : now,
+            rounds: isSameGame ? user.currentGame!.rounds : 1
           }
         })
       }
