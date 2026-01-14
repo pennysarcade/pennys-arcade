@@ -180,6 +180,7 @@ export default function Admin() {
   const [maintenanceMessage, setMaintenanceMessage] = useState('')
   const [announcementText, setAnnouncementText] = useState('')
   const [chatRateLimit, setChatRateLimit] = useState(1000)
+  const [guestChatEnabled, setGuestChatEnabled] = useState(false)
 
   // Ban Modal
   const [banModal, setBanModal] = useState<{ userId: number; username: string } | null>(null)
@@ -253,10 +254,11 @@ export default function Admin() {
 
   const fetchSettings = useCallback(async () => {
     try {
-      const [regRes, maintRes, rateLimitRes] = await Promise.all([
+      const [regRes, maintRes, rateLimitRes, guestChatRes] = await Promise.all([
         fetch('/api/auth/admin/registrations', { headers: { 'Authorization': `Bearer ${token}` } }),
         fetch('/api/auth/admin/maintenance', { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch('/api/auth/admin/chat-rate-limit', { headers: { 'Authorization': `Bearer ${token}` } })
+        fetch('/api/auth/admin/chat-rate-limit', { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch('/api/auth/admin/guest-chat', { headers: { 'Authorization': `Bearer ${token}` } })
       ])
 
       if (regRes.ok) {
@@ -271,6 +273,10 @@ export default function Admin() {
       if (rateLimitRes.ok) {
         const data = await rateLimitRes.json()
         setChatRateLimit(data.rateLimitMs)
+      }
+      if (guestChatRes.ok) {
+        const data = await guestChatRes.json()
+        setGuestChatEnabled(data.enabled)
       }
     } catch { /* ignore */ }
   }, [token])
@@ -409,6 +415,17 @@ export default function Admin() {
         body: JSON.stringify({ rateLimitMs: chatRateLimit })
       })
       alert('Updated')
+    } catch { alert('Failed') }
+  }
+
+  const handleToggleGuestChat = async () => {
+    try {
+      const res = await fetch('/api/auth/admin/guest-chat', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: !guestChatEnabled })
+      })
+      if (res.ok) setGuestChatEnabled(!guestChatEnabled)
     } catch { alert('Failed') }
   }
 
@@ -1158,6 +1175,19 @@ export default function Admin() {
                 />
                 <button className="btn btn-primary" onClick={handleUpdateRateLimit}>Update</button>
               </div>
+            </div>
+
+            <div className="toggle-row">
+              <div className="toggle-info">
+                <span className="toggle-label">Guest Chat</span>
+                <span className="toggle-desc">Allow guests to send messages</span>
+              </div>
+              <button
+                className={`btn ${guestChatEnabled ? 'btn-danger' : 'btn-success'}`}
+                onClick={handleToggleGuestChat}
+              >
+                {guestChatEnabled ? 'Disable' : 'Enable'}
+              </button>
             </div>
           </div>
 

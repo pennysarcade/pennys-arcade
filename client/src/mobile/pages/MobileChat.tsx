@@ -18,6 +18,7 @@ export default function MobileChat() {
     deleteMessage,
     editMessage,
     chatStatus,
+    guestChatEnabled,
     registrationsPaused,
     announcement,
     highScoreAnnouncement,
@@ -68,7 +69,7 @@ export default function MobileChat() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     const trimmedInput = inputValue.trim()
-    if (trimmedInput && !user?.isGuest) {
+    if (trimmedInput && (!user?.isGuest || guestChatEnabled)) {
       sendMessage(inputValue, replyingTo?.id)
       setInputValue('')
       setReplyingTo(null)
@@ -220,7 +221,7 @@ export default function MobileChat() {
             Chat is currently offline
             {chatStatus.offlineMessage && <span>: {chatStatus.offlineMessage}</span>}
           </div>
-        ) : user?.isGuest ? (
+        ) : user?.isGuest && !guestChatEnabled ? (
           <div className="mobile-chat-guest">
             {registrationsPaused ? (
               <span>Registration is currently closed</span>

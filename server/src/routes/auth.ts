@@ -7,7 +7,7 @@ import fs from 'fs'
 import { fileURLToPath } from 'url'
 import { query, queryOne, execute, User, AuditLog, WordFilter, Message, GameSession, AvatarChange } from '../db/schema.js'
 import { authenticateToken, generateToken } from '../middleware/auth.js'
-import { broadcastChatStatus, broadcastAvatarChange, broadcastUsernameChange, broadcastChatClear, broadcastAnnouncement, broadcastMaintenanceMode, broadcastRegistrationStatus, getMessageRateLimit, setMessageRateLimit, reloadWordFilter, broadcastMessageDelete, broadcastAvatarImageChange, getConnectedUsersDetailed } from '../socket/chat.js'
+import { broadcastChatStatus, broadcastAvatarChange, broadcastUsernameChange, broadcastChatClear, broadcastAnnouncement, broadcastMaintenanceMode, broadcastRegistrationStatus, getMessageRateLimit, setMessageRateLimit, getGuestChatEnabled, setGuestChatEnabled, reloadWordFilter, broadcastMessageDelete, broadcastAvatarImageChange, getConnectedUsersDetailed } from '../socket/chat.js'
 import { generateVerificationCode, sendVerificationEmail } from '../utils/email.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -1118,6 +1118,50 @@ router.post('/admin/chat-rate-limit', authenticateToken, async (req, res) => {
     res.json({ rateLimitMs: getMessageRateLimit(), message: 'Chat rate limit updated' })
   } catch (error) {
     console.error('Admin set chat rate limit error:', error)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+// Admin: Get guest chat status
+router.get('/admin/guest-chat', authenticateToken, async (req, res) => {
+  try {
+    const adminId = req.user!.userId
+
+    const admin = await queryOne<User>('SELECT is_admin FROM users WHERE id = $1', [adminId])
+    if (!admin || admin.is_admin !== 1) {
+      res.status(403).json({ message: 'Admin access required' })
+      return
+    }
+
+    res.json({ enabled: getGuestChatEnabled() })
+  } catch (error) {
+    console.error('Admin get guest chat error:', error)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+// Admin: Set guest chat status
+router.post('/admin/guest-chat', authenticateToken, async (req, res) => {
+  try {
+    const adminId = req.user!.userId
+    const { enabled } = req.body
+
+    const admin = await queryOne<User>('SELECT is_admin FROM users WHERE id = $1', [adminId])
+    if (!admin || admin.is_admin !== 1) {
+      res.status(403).json({ message: 'Admin access required' })
+      return
+    }
+
+    if (typeof enabled !== 'boolean') {
+      res.status(400).json({ message: 'Invalid value' })
+      return
+    }
+
+    await setGuestChatEnabled(enabled)
+
+    res.json({ enabled: getGuestChatEnabled(), message: enabled ? 'Guest chat enabled' : 'Guest chat disabled' })
+  } catch (error) {
+    console.error('Admin set guest chat error:', error)
     res.status(500).json({ message: 'Server error' })
   }
 })

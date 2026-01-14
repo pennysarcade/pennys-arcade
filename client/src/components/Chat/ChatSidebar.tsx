@@ -24,7 +24,7 @@ function formatTimestamp(timestamp: number): string {
 
 export default function ChatSidebar({ onRegisterClick, width, activeTab, onTabChange }: ChatSidebarProps) {
   const { user } = useAuth()
-  const { messages, sendMessage, deleteMessage, editMessage, chatStatus, registrationsPaused, announcement, highScoreAnnouncement, clearAnnouncement, clearHighScoreAnnouncement, messageRateLimitMs, canSendAt, onlineUsers, isConnected, tickerMessages, removeTickerMessage, addTickerMessage } = useSocket()
+  const { messages, sendMessage, deleteMessage, editMessage, chatStatus, guestChatEnabled, registrationsPaused, announcement, highScoreAnnouncement, clearAnnouncement, clearHighScoreAnnouncement, messageRateLimitMs, canSendAt, onlineUsers, isConnected, tickerMessages, removeTickerMessage, addTickerMessage } = useSocket()
 
   const chatTabs = [
     { id: 'chat', label: 'Chat' },
@@ -78,7 +78,7 @@ export default function ChatSidebar({ onRegisterClick, width, activeTab, onTabCh
       return
     }
 
-    if (trimmedInput && !user?.isGuest) {
+    if (trimmedInput && (!user?.isGuest || guestChatEnabled)) {
       sendMessage(inputValue, replyingTo?.id)
       setInputValue('')
       setReplyingTo(null)
@@ -287,7 +287,7 @@ export default function ChatSidebar({ onRegisterClick, width, activeTab, onTabCh
                   <div className="chat-disabled-message">{chatStatus.offlineMessage}</div>
                 )}
               </div>
-            ) : user?.isGuest ? (
+            ) : user?.isGuest && !guestChatEnabled ? (
               <div className="chat-guest-prompt">
                 {registrationsPaused ? (
                   <span>Registration is currently closed</span>

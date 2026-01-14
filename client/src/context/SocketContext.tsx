@@ -67,6 +67,7 @@ interface SocketContextType {
   messages: ChatMessage[]
   onlineUsers: OnlineUser[]
   chatStatus: ChatStatus
+  guestChatEnabled: boolean
   maintenance: MaintenanceStatus
   registrationsPaused: boolean
   announcement: Announcement | null
@@ -93,6 +94,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([])
   const [chatStatus, setChatStatus] = useState<ChatStatus>({ enabled: true, offlineMessage: null })
+  const [guestChatEnabled, setGuestChatEnabled] = useState(false)
   const [maintenance, setMaintenance] = useState<MaintenanceStatus>({ enabled: false })
   const [registrationsPaused, setRegistrationsPaused] = useState(false)
   const [announcement, setAnnouncement] = useState<Announcement | null>(null)
@@ -308,6 +310,10 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       setMessageRateLimitMs(data.rateLimitMs)
     })
 
+    newSocket.on('chat:guestChatStatus', (data: { enabled: boolean }) => {
+      setGuestChatEnabled(data.enabled)
+    })
+
     setSocket(newSocket)
 
     return () => {
@@ -316,7 +322,8 @@ export function SocketProvider({ children }: { children: ReactNode }) {
   }, [user?.id, user?.username, token])
 
   const sendMessage = (text: string, replyToId?: string) => {
-    if (socket && !user?.isGuest && text.trim()) {
+    const canSend = socket && text.trim() && (!user?.isGuest || guestChatEnabled)
+    if (canSend) {
       socket.emit('chat:send', { text: text.trim(), replyToId })
       // Set cooldown for next message
       if (messageRateLimitMs > 0) {
@@ -353,7 +360,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
 
   return (
     <SocketContext.Provider
-      value={{ socket, isConnected, messages, onlineUsers, chatStatus, maintenance, registrationsPaused, announcement, highScoreAnnouncement, messageRateLimitMs, canSendAt, tickerMessages, sendMessage, deleteMessage, editMessage, clearAnnouncement, clearHighScoreAnnouncement, addTickerMessage, removeTickerMessage, updatePage }}
+      value={{ socket, isConnected, messages, onlineUsers, chatStatus, guestChatEnabled, maintenance, registrationsPaused, announcement, highScoreAnnouncement, messageRateLimitMs, canSendAt, tickerMessages, sendMessage, deleteMessage, editMessage, clearAnnouncement, clearHighScoreAnnouncement, addTickerMessage, removeTickerMessage, updatePage }}
     >
       {children}
     </SocketContext.Provider>

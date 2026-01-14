@@ -298,6 +298,11 @@ export async function initDatabase() {
     VALUES ('chat_rate_limit_ms', '1000')
     ON CONFLICT (key) DO NOTHING
   `)
+  await pool.query(`
+    INSERT INTO settings (key, value)
+    VALUES ('guest_chat_enabled', 'false')
+    ON CONFLICT (key) DO NOTHING
+  `)
 
   console.log('Database initialized')
 }

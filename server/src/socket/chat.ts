@@ -263,6 +263,7 @@ const recentMessages: ChatMessage[] = []
 const lastMessageTime = new Map<string, number>()
 const MAX_RECENT_MESSAGES = 2048
 let messageRateLimitMs = 1000 // Default: 1 message per second (loaded from DB on startup)
+let guestChatEnabled = false // Default: guests cannot chat (loaded from DB on startup)
 
 // Generate unique guest username by finding the lowest available number
 function generateGuestUsername(): string {
@@ -378,6 +379,41 @@ export async function loadMessageRateLimit(): Promise<void> {
   }
 }
 
+// Get guest chat status
+export function getGuestChatEnabled(): boolean {
+  return guestChatEnabled
+}
+
+// Set guest chat status (called by admin endpoint) - also persists to database
+export async function setGuestChatEnabled(enabled: boolean): Promise<void> {
+  guestChatEnabled = enabled
+
+  // Persist to database
+  await execute(
+    `INSERT INTO settings (key, value, updated_at)
+     VALUES ('guest_chat_enabled', $1, CURRENT_TIMESTAMP)
+     ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = CURRENT_TIMESTAMP`,
+    [String(enabled)]
+  )
+
+  // Broadcast to all connected clients
+  if (ioInstance) {
+    ioInstance.emit('chat:guestChatStatus', { enabled: guestChatEnabled })
+  }
+}
+
+// Load guest chat status from database (called on startup)
+export async function loadGuestChatEnabled(): Promise<void> {
+  const result = await queryOne<{ value: string }>(
+    'SELECT value FROM settings WHERE key = $1',
+    ['guest_chat_enabled']
+  )
+  if (result?.value) {
+    guestChatEnabled = result.value === 'true'
+    console.log(`[CHAT] Loaded guest chat enabled from database: ${guestChatEnabled}`)
+  }
+}
+
 // Get list of online users for broadcasting
 function getOnlineUsersList() {
   const users: Array<{ username: string; avatarColor: string; avatarImage: string | null; isGuest: boolean }> = []
@@ -443,6 +479,7 @@ export async function setupChatSocket(io: Server) {
 
   // Load settings from database
   await loadMessageRateLimit()
+  await loadGuestChatEnabled()
   await loadWordFilter()
 
   // Check for expired bans on startup and every minute
@@ -576,16 +613,24 @@ export async function setupChatSocket(io: Server) {
     const chatStatus = await getChatStatus()
     socket.emit('chat:status', chatStatus)
 
+    // Send guest chat status
+    socket.emit('chat:guestChatStatus', { enabled: guestChatEnabled })
+
     // Broadcast updated user list to all clients
     io.emit('chat:users', getOnlineUsersList())
 
     console.log(`User connected: ${user.username} (${user.isGuest ? 'guest' : 'registered'})`)
 
-    // Handle incoming messages (only from registered users)
+    // Handle incoming messages
     socket.on('chat:send', async (data: { text: string; replyToId?: string }) => {
       const sender = connectedUsers.get(socket.id)
 
-      if (!sender || sender.isGuest) {
+      if (!sender) {
+        return
+      }
+
+      // Check if guests are allowed to chat
+      if (sender.isGuest && !guestChatEnabled) {
         socket.emit('chat:error', { message: 'Only registered users can send messages' })
         return
       }
