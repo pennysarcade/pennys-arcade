@@ -106,7 +106,7 @@ export default function GameCard({
   }
 
   return (
-    <Link to={`/game/${id}`} style={{ textDecoration: 'none' }}>
+    <Link to={`/${id}`} style={{ textDecoration: 'none' }}>
       {cardContent}
     </Link>
   )

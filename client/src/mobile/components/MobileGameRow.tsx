@@ -74,7 +74,7 @@ export default function MobileGameRow() {
         }
 
         return (
-          <Link key={game.id} to={`/game/${game.id}`}>
+          <Link key={game.id} to={`/${game.id}`}>
             {card}
           </Link>
         )

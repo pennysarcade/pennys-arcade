@@ -11,6 +11,7 @@ import ResizeHandle from '../UI/ResizeHandle'
 import TabBar from '../UI/TabBar'
 import FitText from '../UI/FitText'
 import ScrollContainer from '../UI/ScrollContainer'
+import { GAMES } from '../Games/ArcadeGrid'
 
 interface MainLayoutProps {
   children: ReactNode
@@ -105,8 +106,14 @@ export default function MainLayout({ children }: MainLayoutProps) {
     navigate(tabId)
   }
 
+  const isGamePath = (pathname: string) => {
+    if (pathname.startsWith('/game/')) return true
+    const gameId = pathname.slice(1) // remove leading slash
+    return GAMES.some(g => g.id === gameId)
+  }
+
   const getActiveTab = () => {
-    if (location.pathname === '/' || location.pathname.startsWith('/game/')) {
+    if (location.pathname === '/' || isGamePath(location.pathname)) {
       return '/'
     }
     return location.pathname

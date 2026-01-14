@@ -1,6 +1,7 @@
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { useDeviceType } from '../../hooks/useDeviceType'
+import { GAMES } from '../../components/Games/ArcadeGrid'
 
 interface BurgerMenuProps {
   isOpen: boolean
@@ -25,9 +26,15 @@ export default function BurgerMenu({ isOpen, onClose }: BurgerMenuProps) {
     { id: '/privacy', label: 'Privacy' },
   ]
 
+  const isGamePath = (pathname: string) => {
+    if (pathname.startsWith('/game/')) return true
+    const gameId = pathname.slice(1) // remove leading slash
+    return GAMES.some(g => g.id === gameId)
+  }
+
   const isActive = (path: string) => {
     if (path === '/') {
-      return location.pathname === '/' || location.pathname.startsWith('/game/')
+      return location.pathname === '/' || isGamePath(location.pathname)
     }
     return location.pathname === path
   }

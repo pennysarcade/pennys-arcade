@@ -96,7 +96,7 @@ export default function Leaderboard() {
           ))}
         </select>
         {selectedGame && (
-          <Link to={`/game/${selectedGame}`} className="btn btn-small">
+          <Link to={`/${selectedGame}`} className="btn btn-small">
             Play {getGameName(selectedGame)}
           </Link>
         )}
@@ -188,7 +188,7 @@ export default function Leaderboard() {
                     </td>
                     <td style={{ textAlign: 'right' }}>{pb.plays}</td>
                     <td>
-                      <Link to={`/game/${pb.game_id}`} className="btn btn-small">
+                      <Link to={`/${pb.game_id}`} className="btn btn-small">
                         Play
                       </Link>
                     </td>

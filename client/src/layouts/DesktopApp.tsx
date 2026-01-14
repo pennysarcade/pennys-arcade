@@ -13,6 +13,7 @@ export default function DesktopApp() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/game/:id" element={<Game />} />
+        <Route path="/:id" element={<Game />} />
         <Route path="/about" element={<About />} />
         <Route path="/leaderboard" element={<Leaderboard />} />
         <Route path="/roadmap" element={<Navigate to="/about" replace />} />

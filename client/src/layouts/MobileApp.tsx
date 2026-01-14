@@ -23,6 +23,7 @@ export default function MobileApp() {
           <Route path="/" element={<MobileHome />} />
           <Route path="/chat" element={<MobileChat />} />
           <Route path="/game/:id" element={<MobileGame />} />
+          <Route path="/:id" element={<MobileGame />} />
           <Route path="/profile" element={<MobileProfile />} />
           <Route path="/about" element={<About />} />
           <Route path="/leaderboard" element={<Leaderboard />} />

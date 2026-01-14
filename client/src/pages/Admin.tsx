@@ -650,6 +650,10 @@ export default function Admin() {
     if (path === '/chat') return 'Chat'
     if (path.startsWith('/game/')) return `Game: ${path.split('/')[2]}`
     if (path.startsWith('/games')) return 'Games'
+    // Check for short game URLs (e.g., /tessles, /onzac)
+    const gameId = path.slice(1)
+    const game = GAMES.find(g => g.id === gameId)
+    if (game) return `Game: ${gameId}`
     return path
   }
 
