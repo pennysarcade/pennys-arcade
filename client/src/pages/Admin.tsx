@@ -652,7 +652,7 @@ export default function Admin() {
                         <td>
                           <div className="user-cell">
                             {u.avatarImage ? (
-                              <img className="avatar" src={u.avatarImage} alt="" />
+                              <img className="avatar" src={`/avatars/${u.avatarImage}`} alt="" />
                             ) : (
                               <span className="avatar" style={{ backgroundColor: u.avatarColor }} />
                             )}
