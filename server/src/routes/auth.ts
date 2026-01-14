@@ -1263,7 +1263,35 @@ router.get('/admin/connected-users', authenticateToken, async (req, res) => {
     }
 
     const connectedUsers = getConnectedUsersDetailed()
-    res.json({ users: connectedUsers })
+
+    // Fetch active game sessions for connected users
+    const userIds = connectedUsers
+      .filter(u => u.userId)
+      .map(u => u.userId)
+
+    let activeSessions: Map<number, GameSession> = new Map()
+    if (userIds.length > 0) {
+      const sessions = await query<GameSession>(
+        `SELECT * FROM game_sessions
+         WHERE user_id = ANY($1) AND status = 'playing'
+         ORDER BY started_at DESC`,
+        [userIds]
+      )
+      // Map by user_id (most recent session per user)
+      for (const session of sessions) {
+        if (!activeSessions.has(session.user_id)) {
+          activeSessions.set(session.user_id, session)
+        }
+      }
+    }
+
+    // Attach active session data to connected users
+    const usersWithSessions = connectedUsers.map(u => ({
+      ...u,
+      activeSession: u.userId ? activeSessions.get(u.userId) || null : null
+    }))
+
+    res.json({ users: usersWithSessions })
   } catch (error) {
     console.error('Admin connected users error:', error)
     res.status(500).json({ message: 'Server error' })

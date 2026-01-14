@@ -84,6 +84,18 @@ interface LocationInfo {
   ip: string
 }
 
+interface ActiveSession {
+  id: number
+  user_id: number
+  game_id: string
+  score: number
+  status: string
+  stats: string | null
+  platform: string
+  started_at: string
+  ended_at: string | null
+}
+
 interface ConnectedUser {
   socketId: string
   username: string
@@ -95,6 +107,7 @@ interface ConnectedUser {
   currentPage: string
   device: DeviceInfo
   location: LocationInfo | null
+  activeSession: ActiveSession | null
 }
 
 interface HighScore {
@@ -804,7 +817,19 @@ export default function Admin() {
                             <span className="muted-text">Loading...</span>
                           )}
                         </td>
-                        <td>{formatPage(u.currentPage)}</td>
+                        <td>
+                          {u.activeSession ? (
+                            <span
+                              className="game-page-with-score"
+                              title={`Score: ${u.activeSession.score.toLocaleString()}${u.activeSession.stats ? `\nStats: ${u.activeSession.stats}` : ''}\nStarted: ${new Date(u.activeSession.started_at).toLocaleTimeString()}`}
+                            >
+                              {formatPage(u.currentPage)}
+                              <span className="game-score-badge">{u.activeSession.score.toLocaleString()}</span>
+                            </span>
+                          ) : (
+                            formatPage(u.currentPage)
+                          )}
+                        </td>
                         <td className="muted-text">{formatDuration(u.connectedAt)}</td>
                       </tr>
                     ))}
