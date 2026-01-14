@@ -1960,6 +1960,7 @@ let canvasClearedTime = 0; // Track when all enemies were cleared
 let paused = false;
 let pauseStartTime = 0;
 let totalPausedTime = 0;
+let lastScoreUpdateTime = 0;
 
 function init() {
     gameOver = false;
@@ -1970,6 +1971,7 @@ function init() {
     paused = false;
     pauseStartTime = 0;
     totalPausedTime = 0;
+    lastScoreUpdateTime = 0;
     circles = [];
     particles = [];
     playerTrail = [];
@@ -2019,6 +2021,14 @@ function init() {
     AudioSystem.init();
     AudioSystem.playStart();
     setTimeout(() => AudioSystem.startMusic(), 500);
+
+    // Notify parent window that a new game is starting
+    if (window.parent !== window) {
+        window.parent.postMessage({
+            type: 'GAME_START',
+            game: 'tessles'
+        }, '*');
+    }
 
     gameStarted = true;
     gameLoop();
@@ -2470,6 +2480,21 @@ function gameLoop() {
 
         // Check for system message events
         SystemMessages.checkEvents(elapsedSeconds, circles.length, player);
+
+        // Send periodic score updates to parent (every 30 seconds)
+        if (window.parent !== window && Date.now() - lastScoreUpdateTime >= 30000) {
+            lastScoreUpdateTime = Date.now();
+            window.parent.postMessage({
+                type: 'SCORE_UPDATE',
+                game: 'tessles',
+                score: Math.floor(score),
+                stats: {
+                    time: elapsedSeconds,
+                    maxCombo: maxCombo,
+                    waves: waveNumber
+                }
+            }, '*');
+        }
 
         requestAnimationFrame(gameLoop);
     } else {

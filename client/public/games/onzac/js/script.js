@@ -85,6 +85,9 @@ let gameState = {
   // Restart cooldown
   gameOverTime: 0,
   restartCooldown: 2000, // 2 seconds
+
+  // Score update tracking
+  lastScoreUpdateTime: 0,
 };
 
 // Listen for high score data from parent window
@@ -2721,6 +2724,7 @@ function resetGame() {
   gameState.currentWeapon = 'ball';
   gameState.blackHolesAvailable = 0;
   gameState.lastBlackHoleScoreThreshold = 0;
+  gameState.lastScoreUpdateTime = 0;
 
   uninfectedTriangles.length = 0;
   zombies.length = 0;
@@ -2909,6 +2913,21 @@ function update() {
     turret.energy,
     turret.maxEnergy
   );
+
+  // Send periodic score updates to parent (every 30 seconds)
+  if (window.parent !== window && Date.now() - gameState.lastScoreUpdateTime >= 30000) {
+    gameState.lastScoreUpdateTime = Date.now();
+    window.parent.postMessage({
+      type: 'SCORE_UPDATE',
+      game: 'onzac',
+      score: gameState.score,
+      stats: {
+        time: elapsedSeconds,
+        maxCombo: gameState.maxCombo,
+        zombiesKilled: gameState.zombiesKilled
+      }
+    }, '*');
+  }
 }
 
 // ============================================
