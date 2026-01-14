@@ -35,13 +35,11 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-let guestCounter = 1
-
 function generateGuestUser(): User {
-  const guestNum = guestCounter++
+  // Generate a temporary guest user - server will assign actual unique name on socket connect
   return {
-    id: -guestNum,
-    username: `n00b_${guestNum}`,
+    id: -1,
+    username: 'n00b',
     email: '',
     avatarColor: '#606060',
     avatarImage: null,

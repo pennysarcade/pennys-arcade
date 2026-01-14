@@ -246,6 +246,21 @@ const lastMessageTime = new Map<string, number>()
 const MAX_RECENT_MESSAGES = 2048
 let messageRateLimitMs = 1000 // Default: 1 message per second (loaded from DB on startup)
 
+// Generate unique guest username by finding the lowest available number
+function generateGuestUsername(): string {
+  const usedNumbers = new Set<number>()
+  connectedUsers.forEach((user) => {
+    if (user.isGuest && user.username.startsWith('n00b_')) {
+      const num = parseInt(user.username.slice(5), 10)
+      if (!isNaN(num)) usedNumbers.add(num)
+    }
+  })
+  // Find lowest available number starting from 1
+  let num = 1
+  while (usedNumbers.has(num)) num++
+  return `n00b_${num}`
+}
+
 // Get current rate limit (can be updated by admin)
 export function getMessageRateLimit(): number {
   return messageRateLimitMs
@@ -409,7 +424,7 @@ export async function setupChatSocket(io: Server) {
           // User not found in DB (deleted?), treat as guest
           user = {
             socketId: socket.id,
-            username: auth.guestUsername || 'n00b',
+            username: generateGuestUsername(),
             avatarColor: '#606060',
             avatarImage: null,
             isGuest: true,
@@ -421,7 +436,7 @@ export async function setupChatSocket(io: Server) {
         // Invalid token, treat as guest
         user = {
           socketId: socket.id,
-          username: auth.guestUsername || 'n00b',
+          username: generateGuestUsername(),
           avatarColor: '#606060',
           avatarImage: null,
           isGuest: true,
@@ -433,7 +448,7 @@ export async function setupChatSocket(io: Server) {
       // Guest user
       user = {
         socketId: socket.id,
-        username: auth.guestUsername || 'n00b',
+        username: generateGuestUsername(),
         avatarColor: '#606060',
         avatarImage: null,
         isGuest: true,
