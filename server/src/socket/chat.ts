@@ -1,6 +1,22 @@
 import { Server, Socket } from 'socket.io'
 import { query, queryOne, execute, Message, User, WordFilter } from '../db/schema.js'
 import { verifyToken, JWTPayload } from '../middleware/auth.js'
+import { UAParser } from 'ua-parser-js'
+
+interface DeviceInfo {
+  type: string          // 'desktop', 'mobile', 'tablet', 'bot', 'unknown'
+  os: string            // 'Windows 11', 'iOS 17.4', 'Android 14'
+  browser: string       // 'Chrome 120', 'Safari 17.4'
+  device: string | null // 'iPhone 15 Pro', 'Samsung Galaxy S24', null for desktop
+}
+
+interface LocationInfo {
+  country: string
+  region: string
+  city: string
+  isp: string
+  ip: string
+}
 
 // Word filter cache (loaded from DB)
 let wordFilterCache: WordFilter[] = []
@@ -238,6 +254,8 @@ interface ConnectedUser {
   userId?: number
   connectedAt: number
   currentPage: string
+  device: DeviceInfo
+  location: LocationInfo | null
 }
 
 const connectedUsers = new Map<string, ConnectedUser>()
@@ -259,6 +277,67 @@ function generateGuestUsername(): string {
   let num = 1
   while (usedNumbers.has(num)) num++
   return `n00b_${num}`
+}
+
+// Parse User-Agent to extract device information
+function parseDeviceInfo(userAgent: string): DeviceInfo {
+  const parser = new UAParser(userAgent)
+  const result = parser.getResult()
+
+  // Determine device type
+  let type = 'desktop'
+  if (result.device.type === 'mobile') type = 'mobile'
+  else if (result.device.type === 'tablet') type = 'tablet'
+  else if (result.ua?.toLowerCase().includes('bot')) type = 'bot'
+  else if (!result.browser.name) type = 'unknown'
+
+  // Format OS with version
+  let os = result.os.name || 'Unknown'
+  if (result.os.version) os += ` ${result.os.version}`
+
+  // Format browser with version
+  let browser = result.browser.name || 'Unknown'
+  if (result.browser.version) {
+    // Only show major version
+    const majorVersion = result.browser.version.split('.')[0]
+    browser += ` ${majorVersion}`
+  }
+
+  // Device model (mainly for mobile)
+  let device: string | null = null
+  if (result.device.vendor && result.device.model) {
+    device = `${result.device.vendor} ${result.device.model}`
+  } else if (result.device.model) {
+    device = result.device.model
+  }
+
+  return { type, os, browser, device }
+}
+
+// Fetch geolocation from IP address (async, non-blocking)
+async function fetchLocation(ip: string): Promise<LocationInfo | null> {
+  // Skip local/private IPs
+  if (ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168.') || ip.startsWith('10.') || ip.startsWith('172.')) {
+    return { country: 'Local', region: '', city: 'Localhost', isp: 'Local Network', ip }
+  }
+
+  try {
+    const response = await fetch(`http://ip-api.com/json/${ip}?fields=status,message,country,regionName,city,isp,query`)
+    if (!response.ok) return null
+
+    const data = await response.json()
+    if (data.status !== 'success') return null
+
+    return {
+      country: data.country || 'Unknown',
+      region: data.regionName || '',
+      city: data.city || 'Unknown',
+      isp: data.isp || 'Unknown',
+      ip: data.query || ip,
+    }
+  } catch {
+    return null
+  }
 }
 
 // Get current rate limit (can be updated by admin)
@@ -400,6 +479,16 @@ export async function setupChatSocket(io: Server) {
     const auth = socket.handshake.auth
     let user: ConnectedUser
 
+    // Parse device info from User-Agent
+    const userAgent = socket.handshake.headers['user-agent'] || ''
+    const device = parseDeviceInfo(userAgent)
+
+    // Get client IP address (handle proxies)
+    const forwarded = socket.handshake.headers['x-forwarded-for']
+    const clientIp = forwarded
+      ? (typeof forwarded === 'string' ? forwarded.split(',')[0].trim() : forwarded[0])
+      : socket.handshake.address
+
     // Authenticate user
     if (auth.token) {
       const payload = verifyToken(auth.token) as JWTPayload | null
@@ -419,6 +508,8 @@ export async function setupChatSocket(io: Server) {
             userId: payload.userId,
             connectedAt: Date.now(),
             currentPage: auth.currentPage || '/',
+            device,
+            location: null,
           }
         } else {
           // User not found in DB (deleted?), treat as guest
@@ -430,6 +521,8 @@ export async function setupChatSocket(io: Server) {
             isGuest: true,
             connectedAt: Date.now(),
             currentPage: auth.currentPage || '/',
+            device,
+            location: null,
           }
         }
       } else {
@@ -442,6 +535,8 @@ export async function setupChatSocket(io: Server) {
           isGuest: true,
           connectedAt: Date.now(),
           currentPage: auth.currentPage || '/',
+          device,
+          location: null,
         }
       }
     } else {
@@ -454,10 +549,20 @@ export async function setupChatSocket(io: Server) {
         isGuest: true,
         connectedAt: Date.now(),
         currentPage: auth.currentPage || '/',
+        device,
+        location: null,
       }
     }
 
     connectedUsers.set(socket.id, user)
+
+    // Fetch location asynchronously (don't block connection)
+    fetchLocation(clientIp).then(location => {
+      const existing = connectedUsers.get(socket.id)
+      if (existing) {
+        connectedUsers.set(socket.id, { ...existing, location })
+      }
+    })
 
     // Update last_active for registered users
     if (user.userId) {
@@ -799,6 +904,8 @@ export function getConnectedUsersDetailed() {
     userId?: number
     connectedAt: number
     currentPage: string
+    device: DeviceInfo
+    location: LocationInfo | null
   }> = []
 
   connectedUsers.forEach((user) => {
@@ -811,6 +918,8 @@ export function getConnectedUsersDetailed() {
       userId: user.userId,
       connectedAt: user.connectedAt,
       currentPage: user.currentPage,
+      device: user.device,
+      location: user.location,
     })
   })
 

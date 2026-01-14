@@ -69,6 +69,21 @@ interface Stats {
   games: { activeSessions: number; playedToday: number }
 }
 
+interface DeviceInfo {
+  type: string
+  os: string
+  browser: string
+  device: string | null
+}
+
+interface LocationInfo {
+  country: string
+  region: string
+  city: string
+  isp: string
+  ip: string
+}
+
 interface ConnectedUser {
   socketId: string
   username: string
@@ -78,6 +93,8 @@ interface ConnectedUser {
   userId?: number
   connectedAt: number
   currentPage: string
+  device: DeviceInfo
+  location: LocationInfo | null
 }
 
 interface HighScore {
@@ -713,8 +730,9 @@ export default function Admin() {
                     <tr>
                       <th>User</th>
                       <th>Type</th>
-                      <th>Current Page</th>
-                      <th>Connected</th>
+                      <th>Device</th>
+                      <th>Location</th>
+                      <th>Page</th>
                       <th>Duration</th>
                     </tr>
                   </thead>
@@ -736,8 +754,36 @@ export default function Admin() {
                             {u.isGuest ? 'Guest' : 'User'}
                           </span>
                         </td>
+                        <td>
+                          <div className="device-cell">
+                            <span className={`device-icon ${u.device.type}`} title={u.device.type}>
+                              {u.device.type === 'mobile' ? '📱' : u.device.type === 'tablet' ? '📱' : u.device.type === 'bot' ? '🤖' : '💻'}
+                            </span>
+                            <div className="device-info">
+                              <div className="device-primary">
+                                {u.device.device || u.device.os}
+                              </div>
+                              <div className="device-secondary muted-text">
+                                {u.device.browser}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td>
+                          {u.location ? (
+                            <div className="location-cell">
+                              <div className="location-primary">
+                                {u.location.city}{u.location.region ? `, ${u.location.region}` : ''}
+                              </div>
+                              <div className="location-secondary muted-text">
+                                {u.location.country}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="muted-text">Loading...</span>
+                          )}
+                        </td>
                         <td>{formatPage(u.currentPage)}</td>
-                        <td className="muted-text">{new Date(u.connectedAt).toLocaleTimeString()}</td>
                         <td className="muted-text">{formatDuration(u.connectedAt)}</td>
                       </tr>
                     ))}
