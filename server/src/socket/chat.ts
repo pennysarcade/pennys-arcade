@@ -245,6 +245,13 @@ interface ChatMessage {
   replyTo: ReplyInfo | null
 }
 
+interface CurrentGameInfo {
+  gameId: string
+  score: number
+  stats: string | null
+  startedAt: number
+}
+
 interface ConnectedUser {
   socketId: string
   username: string
@@ -256,6 +263,7 @@ interface ConnectedUser {
   currentPage: string
   device: DeviceInfo
   location: LocationInfo | null
+  currentGame: CurrentGameInfo | null
 }
 
 const connectedUsers = new Map<string, ConnectedUser>()
@@ -547,6 +555,7 @@ export async function setupChatSocket(io: Server) {
             currentPage: auth.currentPage || '/',
             device,
             location: null,
+            currentGame: null,
           }
         } else {
           // User not found in DB (deleted?), treat as guest
@@ -560,6 +569,7 @@ export async function setupChatSocket(io: Server) {
             currentPage: auth.currentPage || '/',
             device,
             location: null,
+            currentGame: null,
           }
         }
       } else {
@@ -574,6 +584,7 @@ export async function setupChatSocket(io: Server) {
           currentPage: auth.currentPage || '/',
           device,
           location: null,
+          currentGame: null,
         }
       }
     } else {
@@ -588,6 +599,7 @@ export async function setupChatSocket(io: Server) {
         currentPage: auth.currentPage || '/',
         device,
         location: null,
+        currentGame: null,
       }
     }
 
@@ -920,7 +932,39 @@ export async function setupChatSocket(io: Server) {
     socket.on('page:update', (data: { page: string }) => {
       const user = connectedUsers.get(socket.id)
       if (user && data.page) {
-        connectedUsers.set(socket.id, { ...user, currentPage: data.page })
+        // Clear currentGame if navigating away from a game page
+        const isGamePage = data.page.startsWith('/game/') || data.page.match(/^\/[a-z0-9]+$/i)
+        const wasOnGame = user.currentGame !== null
+        connectedUsers.set(socket.id, {
+          ...user,
+          currentPage: data.page,
+          currentGame: (isGamePage && wasOnGame) ? user.currentGame : (isGamePage ? user.currentGame : null)
+        })
+      }
+    })
+
+    // Handle game score updates (for real-time score display in admin)
+    socket.on('game:scoreUpdate', (data: { gameId: string; score: number; stats?: string }) => {
+      const user = connectedUsers.get(socket.id)
+      if (user && data.gameId) {
+        const now = Date.now()
+        connectedUsers.set(socket.id, {
+          ...user,
+          currentGame: {
+            gameId: data.gameId,
+            score: data.score || 0,
+            stats: data.stats || null,
+            startedAt: user.currentGame?.gameId === data.gameId ? user.currentGame.startedAt : now
+          }
+        })
+      }
+    })
+
+    // Handle game end (clear currentGame)
+    socket.on('game:end', () => {
+      const user = connectedUsers.get(socket.id)
+      if (user) {
+        connectedUsers.set(socket.id, { ...user, currentGame: null })
       }
     })
 
@@ -951,6 +995,7 @@ export function getConnectedUsersDetailed() {
     currentPage: string
     device: DeviceInfo
     location: LocationInfo | null
+    currentGame: CurrentGameInfo | null
   }> = []
 
   connectedUsers.forEach((user) => {
@@ -965,6 +1010,7 @@ export function getConnectedUsersDetailed() {
       currentPage: user.currentPage,
       device: user.device,
       location: user.location,
+      currentGame: user.currentGame,
     })
   })
 

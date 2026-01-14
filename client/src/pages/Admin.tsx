@@ -96,6 +96,13 @@ interface ActiveSession {
   ended_at: string | null
 }
 
+interface CurrentGameInfo {
+  gameId: string
+  score: number
+  stats: string | null
+  startedAt: number
+}
+
 interface ConnectedUser {
   socketId: string
   username: string
@@ -108,6 +115,7 @@ interface ConnectedUser {
   device: DeviceInfo
   location: LocationInfo | null
   activeSession: ActiveSession | null
+  currentGame: CurrentGameInfo | null
 }
 
 interface HighScore {
@@ -819,35 +827,17 @@ export default function Admin() {
                         </td>
                         <td>
                           {(() => {
-                            // Extract game ID from current page path
-                            const getGameIdFromPath = (path: string): string | null => {
-                              if (path.startsWith('/game/')) return path.split('/')[2]
-                              const shortId = path.slice(1) // remove leading /
-                              if (GAMES.some(g => g.id === shortId)) return shortId
-                              return null
-                            }
-
-                            const currentGameId = getGameIdFromPath(u.currentPage)
-                            // Show score if user has active session for the game they're currently viewing
-                            const showScore = u.activeSession && currentGameId && u.activeSession.game_id === currentGameId
-
-                            // Debug logging
-                            if (currentGameId) {
-                              console.log('[ADMIN DEBUG]', u.username, {
-                                currentPage: u.currentPage,
-                                currentGameId,
-                                activeSession: u.activeSession,
-                                showScore
-                              })
-                            }
+                            // Use socket-based currentGame for real-time scores (works for guests too)
+                            const gameInfo = u.currentGame
+                            const showScore = gameInfo !== null
 
                             return showScore ? (
                               <span
                                 className="game-page-with-score"
-                                title={`Score: ${u.activeSession!.score.toLocaleString()}${u.activeSession!.stats ? `\nStats: ${u.activeSession!.stats}` : ''}\nStarted: ${new Date(u.activeSession!.started_at).toLocaleTimeString()}`}
+                                title={`Score: ${gameInfo!.score.toLocaleString()}${gameInfo!.stats ? `\nStats: ${gameInfo!.stats}` : ''}\nStarted: ${new Date(gameInfo!.startedAt).toLocaleTimeString()}`}
                               >
                                 {formatPage(u.currentPage)}
-                                <span className="game-score-badge">{u.activeSession!.score.toLocaleString()}</span>
+                                <span className="game-score-badge">{gameInfo!.score.toLocaleString()}</span>
                               </span>
                             ) : (
                               formatPage(u.currentPage)

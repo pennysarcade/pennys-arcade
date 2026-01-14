@@ -33,7 +33,7 @@ export default function MobileGame() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { user, token } = useAuth()
-  const { addTickerMessage, tickerMessages } = useSocket()
+  const { socket, addTickerMessage, tickerMessages } = useSocket()
   const [sessionId, setSessionId] = useState<number | null>(null)
   const [sessionStatus, setSessionStatus] = useState<'idle' | 'starting' | 'playing' | 'ending' | 'error'>('idle')
   const sessionStartedRef = useRef(false)
@@ -234,9 +234,24 @@ export default function MobileGame() {
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === 'GAME_OVER' && event.data?.game === id) {
         submitScore(event.data.game, event.data.score, event.data.stats)
+        // Clear game state in socket for admin display
+        if (socket) {
+          socket.emit('game:end')
+        }
       }
-      if (event.data?.type === 'SCORE_UPDATE' && event.data?.game === id && sessionId) {
-        updateSessionScore(sessionId, event.data.score, event.data.stats)
+      if (event.data?.type === 'SCORE_UPDATE' && event.data?.game === id) {
+        // Save to database for registered users
+        if (sessionId) {
+          updateSessionScore(sessionId, event.data.score, event.data.stats)
+        }
+        // Always emit via socket for real-time admin display (works for guests too)
+        if (socket) {
+          socket.emit('game:scoreUpdate', {
+            gameId: id,
+            score: event.data.score,
+            stats: event.data.stats ? JSON.stringify(event.data.stats) : undefined
+          })
+        }
       }
       // Skip low priority messages when queue is not empty to reduce verbosity
       if (event.data?.type === 'TICKER_MESSAGE' && event.data?.game === id) {
@@ -258,7 +273,7 @@ export default function MobileGame() {
 
     window.addEventListener('message', handleMessage)
     return () => window.removeEventListener('message', handleMessage)
-  }, [id, sessionId, submitScore, updateSessionScore, startSession, addTickerMessage])
+  }, [id, sessionId, socket, submitScore, updateSessionScore, startSession, addTickerMessage])
 
   if (!game) {
     return (
