@@ -741,3 +741,38 @@
   border-radius: 4px;
   white-space: nowrap;
 }
+
+/* Header Status Row */
+.header-status-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.header-status-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.header-status-item::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.header-status-item.online::before {
+  background: #4CAF50;
+  box-shadow: 0 0 4px #4CAF50;
+}
+
+.header-status-item.offline::before {
+  background: #f44336;
+  box-shadow: 0 0 4px #f44336;
+}

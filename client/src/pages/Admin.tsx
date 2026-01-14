@@ -701,6 +701,17 @@ export default function Admin() {
     <div className="admin-panel">
       <div className="admin-panel-header">
         <h1>Admin Panel</h1>
+        <div className="header-status-row">
+          <span className={`header-status-item ${chatStatus.enabled ? 'online' : 'offline'}`}>
+            Chat: {chatStatus.enabled ? 'On' : 'Off'}
+          </span>
+          <span className={`header-status-item ${registrationsPaused ? 'offline' : 'online'}`}>
+            Reg: {registrationsPaused ? 'Paused' : 'Open'}
+          </span>
+          <span className={`header-status-item ${maintenanceEnabled ? 'offline' : 'online'}`}>
+            Maint: {maintenanceEnabled ? 'On' : 'Off'}
+          </span>
+        </div>
       </div>
 
       <div className="admin-nav">
@@ -739,24 +750,6 @@ export default function Admin() {
               <div className="stat-label">Games Today</div>
               <div className="stat-value">{stats?.games.playedToday ?? '-'}</div>
               <div className="stat-sub">{stats?.games.activeSessions ?? 0} active now</div>
-            </div>
-          </div>
-
-          <div className="admin-card">
-            <h2>Quick Status</h2>
-            <div className="status-grid">
-              <div className="status-item">
-                <span className={`status-dot ${chatStatus.enabled ? 'online' : 'offline'}`} />
-                <span className="status-label">Chat: <strong>{chatStatus.enabled ? 'Online' : 'Offline'}</strong></span>
-              </div>
-              <div className="status-item">
-                <span className={`status-dot ${registrationsPaused ? 'offline' : 'online'}`} />
-                <span className="status-label">Registrations: <strong>{registrationsPaused ? 'Paused' : 'Open'}</strong></span>
-              </div>
-              <div className="status-item">
-                <span className={`status-dot ${maintenanceEnabled ? 'offline' : 'online'}`} />
-                <span className="status-label">Maintenance: <strong>{maintenanceEnabled ? 'On' : 'Off'}</strong></span>
-              </div>
             </div>
           </div>
 
