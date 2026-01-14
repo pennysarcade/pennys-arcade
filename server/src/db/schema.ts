@@ -303,6 +303,11 @@ export async function initDatabase() {
     VALUES ('guest_chat_enabled', 'false')
     ON CONFLICT (key) DO NOTHING
   `)
+  await pool.query(`
+    INSERT INTO settings (key, value)
+    VALUES ('guest_counter', '0')
+    ON CONFLICT (key) DO NOTHING
+  `)
 
   console.log('Database initialized')
 }
