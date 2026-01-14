@@ -41,20 +41,26 @@ router.get('/', async (_req, res) => {
       ? `WHERE game_id NOT IN (${EXCLUDED_GAMES.map((_, i) => `$${i + 1}`).join(', ')})`
       : ''
 
+    // Use DISTINCT ON to get exactly one champion per game (the first to achieve the high score)
+    // Then wrap in a subquery to sort by score descending
     const scores = await query<HighScore>(`
-      SELECT h1.id, COALESCE(u.username, h1.username) as username,
-             COALESCE(u.avatar_color, h1.avatar_color) as avatar_color,
-             u.avatar_image,
-             h1.game_id, h1.score, h1.stats, h1.platform, h1.created_at
-      FROM high_scores h1
-      LEFT JOIN users u ON h1.user_id = u.id
-      INNER JOIN (
-        SELECT game_id, MAX(score) as max_score
-        FROM high_scores
-        ${excludeClause}
-        GROUP BY game_id
-      ) h2 ON h1.game_id = h2.game_id AND h1.score = h2.max_score
-      ORDER BY h1.score DESC
+      SELECT * FROM (
+        SELECT DISTINCT ON (h1.game_id)
+               h1.id, COALESCE(u.username, h1.username) as username,
+               COALESCE(u.avatar_color, h1.avatar_color) as avatar_color,
+               u.avatar_image,
+               h1.game_id, h1.score, h1.stats, h1.platform, h1.created_at
+        FROM high_scores h1
+        LEFT JOIN users u ON h1.user_id = u.id
+        INNER JOIN (
+          SELECT game_id, MAX(score) as max_score
+          FROM high_scores
+          ${excludeClause}
+          GROUP BY game_id
+        ) h2 ON h1.game_id = h2.game_id AND h1.score = h2.max_score
+        ORDER BY h1.game_id, h1.created_at ASC
+      ) champions
+      ORDER BY score DESC
     `, EXCLUDED_GAMES)
 
     res.json({ scores })
