@@ -234,10 +234,8 @@ export default function MobileGame() {
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === 'GAME_OVER' && event.data?.game === id) {
         submitScore(event.data.game, event.data.score, event.data.stats)
-        // Clear game state in socket for admin display
-        if (socket) {
-          socket.emit('game:end')
-        }
+        // Note: Don't emit game:end here - it clears the rounds counter
+        // The game state will clear naturally when user navigates away
       }
       if (event.data?.type === 'SCORE_UPDATE' && event.data?.game === id) {
         // Save to database for registered users
