@@ -1269,6 +1269,8 @@ router.get('/admin/connected-users', authenticateToken, async (req, res) => {
       .filter(u => u.userId)
       .map(u => u.userId)
 
+    console.log('[ADMIN] Connected user IDs:', userIds)
+
     let activeSessions: Map<number, GameSession> = new Map()
     if (userIds.length > 0) {
       const sessions = await query<GameSession>(
@@ -1277,6 +1279,7 @@ router.get('/admin/connected-users', authenticateToken, async (req, res) => {
          ORDER BY started_at DESC`,
         [userIds]
       )
+      console.log('[ADMIN] Found active sessions:', sessions.length, sessions.map(s => ({ userId: s.user_id, gameId: s.game_id, score: s.score })))
       // Map by user_id (most recent session per user)
       for (const session of sessions) {
         if (!activeSessions.has(session.user_id)) {

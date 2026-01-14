@@ -831,6 +831,16 @@ export default function Admin() {
                             // Show score if user has active session for the game they're currently viewing
                             const showScore = u.activeSession && currentGameId && u.activeSession.game_id === currentGameId
 
+                            // Debug logging
+                            if (currentGameId) {
+                              console.log('[ADMIN DEBUG]', u.username, {
+                                currentPage: u.currentPage,
+                                currentGameId,
+                                activeSession: u.activeSession,
+                                showScore
+                              })
+                            }
+
                             return showScore ? (
                               <span
                                 className="game-page-with-score"
