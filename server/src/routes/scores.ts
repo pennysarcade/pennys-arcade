@@ -37,6 +37,10 @@ router.get('/', async (_req, res) => {
   try {
     // Get top score for each game, using current username from users table
     // Excludes offline/deprecated games
+    const excludeClause = EXCLUDED_GAMES.length > 0
+      ? `WHERE game_id NOT IN (${EXCLUDED_GAMES.map((_, i) => `$${i + 1}`).join(', ')})`
+      : ''
+
     const scores = await query<HighScore>(`
       SELECT h1.id, COALESCE(u.username, h1.username) as username,
              COALESCE(u.avatar_color, h1.avatar_color) as avatar_color,
@@ -47,7 +51,7 @@ router.get('/', async (_req, res) => {
       INNER JOIN (
         SELECT game_id, MAX(score) as max_score
         FROM high_scores
-        WHERE game_id NOT IN (${EXCLUDED_GAMES.map((_, i) => `$${i + 1}`).join(', ')})
+        ${excludeClause}
         GROUP BY game_id
       ) h2 ON h1.game_id = h2.game_id AND h1.score = h2.max_score
       ORDER BY h1.score DESC
@@ -66,10 +70,14 @@ router.get('/user/me', authenticateToken, async (req, res) => {
     const userId = req.user!.userId
 
     // Exclude offline/deprecated games from personal bests
+    const excludeClause = EXCLUDED_GAMES.length > 0
+      ? `AND game_id NOT IN (${EXCLUDED_GAMES.map((_, i) => `$${i + 2}`).join(', ')})`
+      : ''
+
     const scores = await query<{ game_id: string; score: number; plays: string }>(`
       SELECT game_id, MAX(score) as score, COUNT(*) as plays
       FROM high_scores
-      WHERE user_id = $1 AND game_id NOT IN (${EXCLUDED_GAMES.map((_, i) => `$${i + 2}`).join(', ')})
+      WHERE user_id = $1 ${excludeClause}
       GROUP BY game_id
       ORDER BY score DESC
     `, [userId, ...EXCLUDED_GAMES])
