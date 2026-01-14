@@ -819,9 +819,17 @@ export default function Admin() {
                         </td>
                         <td>
                           {(() => {
-                            // Check if user is on a game page
-                            const isOnGamePage = u.currentPage.startsWith('/game/') || GAMES.some(g => u.currentPage === `/${g.id}`)
-                            const showScore = u.activeSession && isOnGamePage
+                            // Extract game ID from current page path
+                            const getGameIdFromPath = (path: string): string | null => {
+                              if (path.startsWith('/game/')) return path.split('/')[2]
+                              const shortId = path.slice(1) // remove leading /
+                              if (GAMES.some(g => g.id === shortId)) return shortId
+                              return null
+                            }
+
+                            const currentGameId = getGameIdFromPath(u.currentPage)
+                            // Show score if user has active session for the game they're currently viewing
+                            const showScore = u.activeSession && currentGameId && u.activeSession.game_id === currentGameId
 
                             return showScore ? (
                               <span
