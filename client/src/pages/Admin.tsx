@@ -90,11 +90,24 @@ interface HighScore {
   created_at: string
 }
 
-// All games including hidden/offline ones (for admin purposes)
-const ALL_ADMIN_GAMES = [
-  ...GAMES.filter(g => g.banner),
-  { id: 'hexgrid', title: 'HEXGRID (offline)' },
-]
+// All games with banners (for admin purposes)
+const ALL_ADMIN_GAMES = GAMES.filter(g => g.banner)
+
+const PAGE_SIZE = 50
+
+// Pagination component
+function Pagination({ page, total, onPageChange }: { page: number; total: number; onPageChange: (p: number) => void }) {
+  const totalPages = Math.ceil(total / PAGE_SIZE)
+  if (totalPages <= 1) return null
+
+  return (
+    <div className="pagination">
+      <button className="btn btn-sm" disabled={page === 0} onClick={() => onPageChange(page - 1)}>Prev</button>
+      <span className="pagination-info">Page {page + 1} of {totalPages} ({total} total)</span>
+      <button className="btn btn-sm" disabled={page >= totalPages - 1} onClick={() => onPageChange(page + 1)}>Next</button>
+    </div>
+  )
+}
 
 type Tab = 'overview' | 'users' | 'content' | 'games' | 'settings'
 
@@ -111,25 +124,36 @@ export default function Admin() {
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([])
   const [connectedUsers, setConnectedUsers] = useState<ConnectedUser[]>([])
 
-  // Users
+  // Users (with pagination)
   const [users, setUsers] = useState<User[]>([])
   const [userSearch, setUserSearch] = useState('')
   const [userSort, setUserSort] = useState('created_at')
   const [userOrder, setUserOrder] = useState('desc')
+  const [usersPage, setUsersPage] = useState(0)
+  const [usersTotal, setUsersTotal] = useState(0)
 
-  // Content (Messages + Word Filter)
+  // Content (Messages + Word Filter) (with pagination)
   const [messages, setMessages] = useState<Message[]>([])
   const [messageSearch, setMessageSearch] = useState('')
+  const [messagesPage, setMessagesPage] = useState(0)
+  const [messagesTotal, setMessagesTotal] = useState(0)
   const [wordFilters, setWordFilters] = useState<WordFilter[]>([])
   const [newWord, setNewWord] = useState('')
   const [newWordRegex, setNewWordRegex] = useState(false)
 
-  // Games (Sessions + Scores)
+  // Games (Sessions + Scores) (with pagination)
   const [sessions, setSessions] = useState<GameSession[]>([])
   const [sessionStatus, setSessionStatus] = useState('playing')
   const [scores, setScores] = useState<HighScore[]>([])
-  const [selectedGame, setSelectedGame] = useState(ALL_ADMIN_GAMES[0]?.id || '')
+  const [scoresPage, setScoresPage] = useState(0)
+  const [scoresTotal, setScoresTotal] = useState(0)
+  const [selectedGame, setSelectedGame] = useState('')
   const [wipePassword, setWipePassword] = useState('')
+  const [wipeAllGames, setWipeAllGames] = useState(true)
+
+  // Reset All
+  const [resetPassword, setResetPassword] = useState('')
+  const [resetDeleteUsers, setResetDeleteUsers] = useState(false)
 
   // Settings
   const [offlineMessage, setOfflineMessage] = useState('')
@@ -157,12 +181,14 @@ export default function Admin() {
     } catch { /* ignore */ }
   }, [token])
 
-  const fetchUsers = useCallback(async () => {
+  const fetchUsers = useCallback(async (page = 0) => {
     try {
       const params = new URLSearchParams()
       if (userSearch) params.set('search', userSearch)
       params.set('sort', userSort)
       params.set('order', userOrder)
+      params.set('limit', '50')
+      params.set('offset', String(page * 50))
 
       const res = await fetch(`/api/auth/admin/users?${params}`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -170,16 +196,19 @@ export default function Admin() {
       if (res.ok) {
         const data = await res.json()
         setUsers(data.users)
+        setUsersTotal(data.total)
+        setUsersPage(page)
       }
     } catch { /* ignore */ }
     setLoading(false)
   }, [token, userSearch, userSort, userOrder])
 
-  const fetchMessages = useCallback(async () => {
+  const fetchMessages = useCallback(async (page = 0) => {
     try {
       const params = new URLSearchParams()
       if (messageSearch) params.set('search', messageSearch)
-      params.set('limit', '100')
+      params.set('limit', '50')
+      params.set('offset', String(page * 50))
 
       const res = await fetch(`/api/auth/admin/recent-messages?${params}`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -187,6 +216,8 @@ export default function Admin() {
       if (res.ok) {
         const data = await res.json()
         setMessages(data.messages)
+        setMessagesTotal(data.total)
+        setMessagesPage(page)
       }
     } catch { /* ignore */ }
   }, [token, messageSearch])
@@ -227,14 +258,21 @@ export default function Admin() {
     } catch { /* ignore */ }
   }, [token])
 
-  const fetchScores = useCallback(async (gameId: string) => {
+  const fetchScores = useCallback(async (gameId: string, page = 0) => {
     try {
-      const res = await fetch(`/api/scores/admin/all?gameId=${gameId}&limit=100`, {
+      const params = new URLSearchParams()
+      if (gameId) params.set('gameId', gameId)
+      params.set('limit', '50')
+      params.set('offset', String(page * 50))
+
+      const res = await fetch(`/api/scores/admin/all?${params}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       if (res.ok) {
         const data = await res.json()
         setScores(data.scores)
+        setScoresTotal(data.total)
+        setScoresPage(page)
       }
     } catch { /* ignore */ }
   }, [token])
@@ -298,7 +336,7 @@ export default function Admin() {
     }
     if (activeTab === 'games') {
       fetchSessions()
-      if (selectedGame) fetchScores(selectedGame)
+      fetchScores(selectedGame) // Empty string means all games
     }
   }, [activeTab, fetchMessages, fetchSessions, fetchScores, selectedGame, fetchWordFilter])
 
@@ -507,17 +545,51 @@ export default function Admin() {
   }
 
   const handleWipeScores = async () => {
-    if (!confirm(`Wipe all ${selectedGame} scores?`)) return
+    const target = wipeAllGames ? 'ALL games' : selectedGame
+    if (!confirm(`Wipe all scores for ${target}? This cannot be undone.`)) return
     if (!wipePassword) { alert('Enter password'); return }
     try {
-      const res = await fetch(`/api/scores/admin/game/${selectedGame}`, {
+      const endpoint = wipeAllGames ? '/api/scores/admin/all' : `/api/scores/admin/game/${selectedGame}`
+      const res = await fetch(endpoint, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ password: wipePassword })
       })
       if (res.ok) {
+        const data = await res.json()
+        alert(data.message || 'Scores wiped')
         setWipePassword('')
         fetchScores(selectedGame)
+      } else {
+        const data = await res.json()
+        alert(data.message || 'Failed')
+      }
+    } catch { alert('Failed') }
+  }
+
+  const handleResetAll = async () => {
+    const msg = resetDeleteUsers
+      ? 'This will DELETE ALL: chat messages, high scores, game sessions, AND ALL USER ACCOUNTS (except yours). This CANNOT be undone!'
+      : 'This will DELETE ALL: chat messages, high scores, and game sessions. User accounts will be preserved. This CANNOT be undone!'
+    if (!confirm(msg)) return
+    if (!confirm('Are you ABSOLUTELY sure? Type your password to confirm.')) return
+    if (!resetPassword) { alert('Enter password'); return }
+    try {
+      const res = await fetch('/api/auth/admin/reset-all', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: resetPassword, deleteUsers: resetDeleteUsers })
+      })
+      if (res.ok) {
+        const data = await res.json()
+        alert(data.message || 'Reset complete')
+        setResetPassword('')
+        setResetDeleteUsers(false)
+        fetchStats()
+        fetchUsers()
+        fetchScores(selectedGame)
+        fetchMessages()
+        fetchAuditLog()
       } else {
         const data = await res.json()
         alert(data.message || 'Failed')
@@ -698,6 +770,7 @@ export default function Admin() {
       {/* Users Tab */}
       {activeTab === 'users' && (
         <div className="admin-card">
+          <h2>Users ({usersTotal})</h2>
           <div className="search-bar">
             <input
               type="text"
@@ -705,7 +778,7 @@ export default function Admin() {
               placeholder="Search users..."
               value={userSearch}
               onChange={e => setUserSearch(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && fetchUsers()}
+              onKeyDown={e => e.key === 'Enter' && fetchUsers(0)}
             />
             <select className="form-select" value={userSort} onChange={e => setUserSort(e.target.value)}>
               <option value="created_at">Joined</option>
@@ -716,8 +789,9 @@ export default function Admin() {
               <option value="desc">Desc</option>
               <option value="asc">Asc</option>
             </select>
-            <button className="btn btn-primary" onClick={fetchUsers}>Search</button>
+            <button className="btn btn-primary" onClick={() => fetchUsers(0)}>Search</button>
           </div>
+          <Pagination page={usersPage} total={usersTotal} onPageChange={fetchUsers} />
 
           {loading ? <div className="loading">Loading</div> : (
             <div className="admin-table-wrap">
@@ -773,6 +847,7 @@ export default function Admin() {
               </table>
             </div>
           )}
+          <Pagination page={usersPage} total={usersTotal} onPageChange={fetchUsers} />
         </div>
       )}
 
@@ -780,7 +855,7 @@ export default function Admin() {
       {activeTab === 'content' && (
         <>
           <div className="admin-card">
-            <h2>Chat Messages</h2>
+            <h2>Chat Messages ({messagesTotal})</h2>
             <div className="search-bar">
               <input
                 type="text"
@@ -788,11 +863,12 @@ export default function Admin() {
                 placeholder="Search messages..."
                 value={messageSearch}
                 onChange={e => setMessageSearch(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && fetchMessages()}
+                onKeyDown={e => e.key === 'Enter' && fetchMessages(0)}
               />
-              <button className="btn btn-primary" onClick={fetchMessages}>Search</button>
+              <button className="btn btn-primary" onClick={() => fetchMessages(0)}>Search</button>
               <button className="btn btn-danger" onClick={handleClearChat}>Clear All</button>
             </div>
+            <Pagination page={messagesPage} total={messagesTotal} onPageChange={fetchMessages} />
 
             <div className="message-list">
               {messages.length === 0 ? <div className="empty">No messages</div> : (
@@ -816,6 +892,7 @@ export default function Admin() {
                 ))
               )}
             </div>
+            <Pagination page={messagesPage} total={messagesTotal} onPageChange={fetchMessages} />
           </div>
 
           <div className="admin-card">
@@ -891,35 +968,61 @@ export default function Admin() {
           </div>
 
           <div className="admin-card">
-            <h2>High Scores</h2>
+            <h2>High Scores ({scoresTotal})</h2>
             <div className="form-row">
               <div className="form-group">
-                <label className="form-label">Game</label>
+                <label className="form-label">Filter by Game</label>
                 <select
                   className="form-select"
                   value={selectedGame}
-                  onChange={e => setSelectedGame(e.target.value)}
+                  onChange={e => { setSelectedGame(e.target.value); setScoresPage(0) }}
                 >
+                  <option value="">All Games</option>
                   {ALL_ADMIN_GAMES.map(g => (
                     <option key={g.id} value={g.id}>{g.title}</option>
                   ))}
                 </select>
               </div>
-              <div className="form-group">
-                <label className="form-label">Wipe Scores (requires password)</label>
-                <div className="form-row">
+            </div>
+
+            <div className="admin-card-section">
+              <h3>Wipe Scores</h3>
+              <div className="form-row">
+                <label className="checkbox-label">
                   <input
-                    type="password"
-                    className="form-input"
-                    placeholder="Password"
-                    value={wipePassword}
-                    onChange={e => setWipePassword(e.target.value)}
-                    style={{ width: 150 }}
+                    type="checkbox"
+                    checked={wipeAllGames}
+                    onChange={e => setWipeAllGames(e.target.checked)}
                   />
-                  <button className="btn btn-danger" onClick={handleWipeScores}>Wipe All</button>
-                </div>
+                  All games
+                </label>
+                {!wipeAllGames && (
+                  <select
+                    className="form-select"
+                    value={selectedGame || ALL_ADMIN_GAMES[0]?.id}
+                    onChange={e => setSelectedGame(e.target.value)}
+                    style={{ width: 150 }}
+                  >
+                    {ALL_ADMIN_GAMES.map(g => (
+                      <option key={g.id} value={g.id}>{g.title}</option>
+                    ))}
+                  </select>
+                )}
+                <input
+                  type="password"
+                  className="form-input"
+                  placeholder="Password"
+                  value={wipePassword}
+                  onChange={e => setWipePassword(e.target.value)}
+                  style={{ width: 150 }}
+                />
+                <button className="btn btn-danger" onClick={handleWipeScores}>
+                  Wipe {wipeAllGames ? 'All' : selectedGame}
+                </button>
               </div>
             </div>
+
+            <Pagination page={scoresPage} total={scoresTotal} onPageChange={p => fetchScores(selectedGame, p)} />
 
             <div className="admin-table-wrap">
               <table className="admin-tbl">
@@ -927,6 +1030,7 @@ export default function Admin() {
                   <tr>
                     <th>#</th>
                     <th>Player</th>
+                    {!selectedGame && <th>Game</th>}
                     <th>Score</th>
                     <th>Date</th>
                     <th>Actions</th>
@@ -935,13 +1039,14 @@ export default function Admin() {
                 <tbody>
                   {scores.map((s, i) => (
                     <tr key={s.id}>
-                      <td>{i + 1}</td>
+                      <td>{scoresPage * PAGE_SIZE + i + 1}</td>
                       <td>
                         <div className="user-cell">
                           <span className="avatar" style={{ backgroundColor: s.avatar_color }} />
                           <span>{s.username}</span>
                         </div>
                       </td>
+                      {!selectedGame && <td>{ALL_ADMIN_GAMES.find(g => g.id === s.game_id)?.title || s.game_id}</td>}
                       <td>{s.score.toLocaleString()}</td>
                       <td className="muted-text">{formatDate(s.created_at)}</td>
                       <td>
@@ -952,6 +1057,7 @@ export default function Admin() {
                 </tbody>
               </table>
             </div>
+            <Pagination page={scoresPage} total={scoresTotal} onPageChange={p => fetchScores(selectedGame, p)} />
           </div>
         </>
       )}
@@ -1056,6 +1162,38 @@ export default function Admin() {
                   {maintenanceEnabled ? 'Disable' : 'Enable'}
                 </button>
               </div>
+            </div>
+          </div>
+
+          <div className="admin-card danger-zone">
+            <h2>Danger Zone</h2>
+            <p style={{ color: '#ff6b6b', marginBottom: 16 }}>
+              Reset the entire site to day zero. This will delete all chat messages, high scores, and game sessions.
+            </p>
+
+            <div className="form-row">
+              <label className="checkbox-label danger">
+                <input
+                  type="checkbox"
+                  checked={resetDeleteUsers}
+                  onChange={e => setResetDeleteUsers(e.target.checked)}
+                />
+                Also delete all user accounts (except yours)
+              </label>
+            </div>
+
+            <div className="form-row" style={{ marginTop: 16 }}>
+              <input
+                type="password"
+                className="form-input"
+                placeholder="Your password to confirm"
+                value={resetPassword}
+                onChange={e => setResetPassword(e.target.value)}
+                style={{ width: 200 }}
+              />
+              <button className="btn btn-danger" onClick={handleResetAll}>
+                Reset Everything
+              </button>
             </div>
           </div>
         </>

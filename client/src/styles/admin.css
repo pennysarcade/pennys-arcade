@@ -618,6 +618,46 @@
   background: #444;
 }
 
+/* Pagination */
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+}
+
+.pagination-info {
+  color: #888;
+  font-size: 13px;
+}
+
+/* Danger Zone */
+.danger-zone {
+  border: 1px solid #ff6b6b40;
+  background: #1a1a2e;
+}
+
+.danger-zone h2 {
+  color: #ff6b6b;
+}
+
+.checkbox-label.danger {
+  color: #ff6b6b;
+}
+
+/* Admin Card Section */
+.admin-card-section {
+  border-top: 1px solid #333;
+  padding-top: 16px;
+  margin-top: 16px;
+}
+
+.admin-card-section h3 {
+  font-size: 14px;
+  margin: 0 0 12px 0;
+  color: #888;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .admin-panel {

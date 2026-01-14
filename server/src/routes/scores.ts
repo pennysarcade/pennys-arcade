@@ -17,7 +17,7 @@ const GAME_NAMES: Record<string, string> = {
 }
 
 // Games excluded from leaderboard (offline/deprecated)
-const EXCLUDED_GAMES = ['hexgrid']
+const EXCLUDED_GAMES: string[] = []
 
 function canAnnounceHighScore(gameId: string): boolean {
   const lastTime = lastHighScoreAnnouncement.get(gameId) || 0
@@ -301,9 +301,11 @@ router.get('/admin/all', authenticateToken, async (req, res) => {
     }
 
     const gameId = req.query.gameId as string | undefined
-    const limit = Math.min(parseInt(req.query.limit as string) || 100, 500)
+    const limit = Math.min(parseInt(req.query.limit as string) || 50, 500)
+    const offset = parseInt(req.query.offset as string) || 0
 
     let scores
+    let total
     if (gameId) {
       scores = await query<HighScore & { user_id: number }>(`
         SELECT h.id, h.user_id, COALESCE(u.username, h.username) as username,
@@ -313,8 +315,9 @@ router.get('/admin/all', authenticateToken, async (req, res) => {
         LEFT JOIN users u ON h.user_id = u.id
         WHERE h.game_id = $1
         ORDER BY h.score DESC
-        LIMIT $2
-      `, [gameId, limit])
+        LIMIT $2 OFFSET $3
+      `, [gameId, limit, offset])
+      total = await queryOne<{ count: string }>('SELECT COUNT(*) as count FROM high_scores WHERE game_id = $1', [gameId])
     } else {
       scores = await query<HighScore & { user_id: number }>(`
         SELECT h.id, h.user_id, COALESCE(u.username, h.username) as username,
@@ -322,12 +325,13 @@ router.get('/admin/all', authenticateToken, async (req, res) => {
                h.game_id, h.score, h.stats, h.created_at
         FROM high_scores h
         LEFT JOIN users u ON h.user_id = u.id
-        ORDER BY h.created_at DESC
-        LIMIT $1
-      `, [limit])
+        ORDER BY h.score DESC
+        LIMIT $1 OFFSET $2
+      `, [limit, offset])
+      total = await queryOne<{ count: string }>('SELECT COUNT(*) as count FROM high_scores')
     }
 
-    res.json({ scores })
+    res.json({ scores, total: parseInt(total?.count || '0'), limit, offset })
   } catch (error) {
     console.error('Admin get all scores error:', error)
     res.status(500).json({ message: 'Server error' })

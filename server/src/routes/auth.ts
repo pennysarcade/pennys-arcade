@@ -366,7 +366,7 @@ router.get('/me', authenticateToken, async (req, res) => {
   }
 })
 
-// Admin: Get all users (with search/filter)
+// Admin: Get all users (with search/filter/pagination)
 router.get('/admin/users', authenticateToken, async (req, res) => {
   try {
     const userId = req.user!.userId
@@ -378,6 +378,8 @@ router.get('/admin/users', authenticateToken, async (req, res) => {
     }
 
     const { search, sort = 'created_at', order = 'desc' } = req.query
+    const limit = Math.min(parseInt(req.query.limit as string) || 50, 500)
+    const offset = parseInt(req.query.offset as string) || 0
     const validSorts = ['id', 'username', 'email', 'created_at', 'last_active']
     const sortCol = validSorts.includes(sort as string) ? sort : 'created_at'
     const sortOrder = order === 'asc' ? 'ASC' : 'DESC'
@@ -386,18 +388,27 @@ router.get('/admin/users', authenticateToken, async (req, res) => {
       SELECT id, username, email, avatar_color, is_admin, is_banned, is_muted, ban_reason, ban_expires_at, discord_username, created_at, last_active
       FROM users
     `
+    let countSql = 'SELECT COUNT(*) as count FROM users'
     const params: unknown[] = []
+    const countParams: unknown[] = []
 
     if (search) {
       sql += ` WHERE username ILIKE $1 OR email ILIKE $1`
+      countSql += ` WHERE username ILIKE $1 OR email ILIKE $1`
       params.push(`%${search}%`)
+      countParams.push(`%${search}%`)
     }
 
     sql += ` ORDER BY ${sortCol} ${sortOrder} NULLS LAST`
+    sql += ` LIMIT $${params.length + 1} OFFSET $${params.length + 2}`
+    params.push(limit, offset)
 
-    const users = await query<User>(sql, params)
+    const [users, total] = await Promise.all([
+      query<User>(sql, params),
+      queryOne<{ count: string }>(countSql, countParams)
+    ])
 
-    res.json({ users })
+    res.json({ users, total: parseInt(total?.count || '0'), limit, offset })
   } catch (error) {
     console.error('Admin users error:', error)
     res.status(500).json({ message: 'Server error' })
@@ -1215,7 +1226,7 @@ router.get('/admin/connected-users', authenticateToken, async (req, res) => {
   }
 })
 
-// Admin: Get recent messages
+// Admin: Get recent messages (with pagination)
 router.get('/admin/recent-messages', authenticateToken, async (req, res) => {
   try {
     const adminId = req.user!.userId
@@ -1225,7 +1236,8 @@ router.get('/admin/recent-messages', authenticateToken, async (req, res) => {
       return
     }
 
-    const limit = Math.min(parseInt(req.query.limit as string) || 100, 500)
+    const limit = Math.min(parseInt(req.query.limit as string) || 50, 500)
+    const offset = parseInt(req.query.offset as string) || 0
     const search = req.query.search as string
 
     let sql = `
@@ -1233,19 +1245,26 @@ router.get('/admin/recent-messages', authenticateToken, async (req, res) => {
       FROM messages m
       LEFT JOIN users u ON m.user_id = u.id
     `
+    let countSql = 'SELECT COUNT(*) as count FROM messages m'
     const params: unknown[] = []
+    const countParams: unknown[] = []
 
     if (search) {
       sql += ` WHERE m.content ILIKE $1 OR m.username ILIKE $1`
+      countSql += ` WHERE m.content ILIKE $1 OR m.username ILIKE $1`
       params.push(`%${search}%`)
+      countParams.push(`%${search}%`)
     }
 
-    sql += ` ORDER BY m.created_at DESC LIMIT $${params.length + 1}`
-    params.push(limit)
+    sql += ` ORDER BY m.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`
+    params.push(limit, offset)
 
-    const messages = await query<Message & { email?: string }>(sql, params)
+    const [messages, total] = await Promise.all([
+      query<Message & { email?: string }>(sql, params),
+      queryOne<{ count: string }>(countSql, countParams)
+    ])
 
-    res.json({ messages })
+    res.json({ messages, total: parseInt(total?.count || '0'), limit, offset })
   } catch (error) {
     console.error('Admin recent messages error:', error)
     res.status(500).json({ message: 'Server error' })
@@ -1461,6 +1480,89 @@ router.get('/admin/audit-log', authenticateToken, async (req, res) => {
     res.json({ logs, total: parseInt(total?.count || '0') })
   } catch (error) {
     console.error('Admin audit log error:', error)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+// Admin: Reset all (nuclear option - wipe everything)
+router.post('/admin/reset-all', authenticateToken, async (req, res) => {
+  try {
+    const adminId = req.user!.userId
+    const { password, deleteUsers } = req.body
+
+    if (!password) {
+      res.status(400).json({ message: 'Password required for this operation' })
+      return
+    }
+
+    const admin = await queryOne<User>(
+      'SELECT is_admin, username, password_hash FROM users WHERE id = $1',
+      [adminId]
+    )
+
+    if (!admin || admin.is_admin !== 1) {
+      res.status(403).json({ message: 'Admin access required' })
+      return
+    }
+
+    // Verify password
+    if (!admin.password_hash) {
+      res.status(400).json({ message: 'Cannot verify password for this account' })
+      return
+    }
+
+    const validPassword = await bcrypt.compare(password, admin.password_hash)
+    if (!validPassword) {
+      res.status(401).json({ message: 'Invalid password' })
+      return
+    }
+
+    // Count everything before deletion
+    const [msgCount, scoreCount, sessionCount, userCount] = await Promise.all([
+      queryOne<{ count: string }>('SELECT COUNT(*) as count FROM messages'),
+      queryOne<{ count: string }>('SELECT COUNT(*) as count FROM high_scores'),
+      queryOne<{ count: string }>('SELECT COUNT(*) as count FROM game_sessions'),
+      queryOne<{ count: string }>('SELECT COUNT(*) as count FROM users WHERE id != $1', [adminId])
+    ])
+
+    // Delete everything
+    await execute('DELETE FROM messages')
+    await execute('DELETE FROM high_scores')
+    await execute('DELETE FROM game_sessions')
+
+    let usersDeleted = 0
+    if (deleteUsers) {
+      // Delete all users except the admin performing the action
+      // First delete dependent data
+      await execute('DELETE FROM username_history WHERE user_id != $1', [adminId])
+      await execute('DELETE FROM avatar_changes WHERE user_id != $1', [adminId])
+      await execute('DELETE FROM verification_codes WHERE user_id != $1', [adminId])
+      // Then delete users
+      const result = await execute('DELETE FROM users WHERE id != $1', [adminId])
+      usersDeleted = result.rowCount
+    }
+
+    // Log the action
+    await logAdminAction(
+      adminId,
+      admin.username,
+      deleteUsers ? 'reset_all_with_users' : 'reset_all',
+      undefined,
+      undefined,
+      undefined,
+      `Deleted ${msgCount?.count || 0} messages, ${scoreCount?.count || 0} scores, ${sessionCount?.count || 0} sessions${deleteUsers ? `, ${usersDeleted} users` : ''}`
+    )
+
+    console.log(`[ADMIN] FULL RESET by ${admin.username}: ${msgCount?.count || 0} messages, ${scoreCount?.count || 0} scores, ${sessionCount?.count || 0} sessions${deleteUsers ? `, ${usersDeleted} users` : ''}`)
+
+    // Broadcast chat clear
+    broadcastChatClear()
+
+    res.json({
+      message: `Reset complete. Deleted ${msgCount?.count || 0} messages, ${scoreCount?.count || 0} scores, ${sessionCount?.count || 0} sessions${deleteUsers ? `, ${usersDeleted} users` : ''}.`
+    })
+  } catch (error) {
+    console.error('Admin reset all error:', error)
     res.status(500).json({ message: 'Server error' })
   }
 })
