@@ -236,6 +236,8 @@ interface ConnectedUser {
   avatarImage: string | null
   isGuest: boolean
   userId?: number
+  connectedAt: number
+  currentPage: string
 }
 
 const connectedUsers = new Map<string, ConnectedUser>()
@@ -400,6 +402,8 @@ export async function setupChatSocket(io: Server) {
             avatarImage: dbUser.avatar_image || null,
             isGuest: false,
             userId: payload.userId,
+            connectedAt: Date.now(),
+            currentPage: auth.currentPage || '/',
           }
         } else {
           // User not found in DB (deleted?), treat as guest
@@ -409,6 +413,8 @@ export async function setupChatSocket(io: Server) {
             avatarColor: '#606060',
             avatarImage: null,
             isGuest: true,
+            connectedAt: Date.now(),
+            currentPage: auth.currentPage || '/',
           }
         }
       } else {
@@ -419,6 +425,8 @@ export async function setupChatSocket(io: Server) {
           avatarColor: '#606060',
           avatarImage: null,
           isGuest: true,
+          connectedAt: Date.now(),
+          currentPage: auth.currentPage || '/',
         }
       }
     } else {
@@ -429,6 +437,8 @@ export async function setupChatSocket(io: Server) {
         avatarColor: '#606060',
         avatarImage: null,
         isGuest: true,
+        connectedAt: Date.now(),
+        currentPage: auth.currentPage || '/',
       }
     }
 
@@ -741,6 +751,14 @@ export async function setupChatSocket(io: Server) {
       }
     })
 
+    // Handle page navigation updates
+    socket.on('page:update', (data: { page: string }) => {
+      const user = connectedUsers.get(socket.id)
+      if (user && data.page) {
+        connectedUsers.set(socket.id, { ...user, currentPage: data.page })
+      }
+    })
+
     // Handle disconnect
     socket.on('disconnect', () => {
       const disconnectedUser = connectedUsers.get(socket.id)
@@ -753,4 +771,34 @@ export async function setupChatSocket(io: Server) {
       }
     })
   })
+}
+
+// Get all connected users with detailed info (for admin panel)
+export function getConnectedUsersDetailed() {
+  const users: Array<{
+    socketId: string
+    username: string
+    avatarColor: string
+    avatarImage: string | null
+    isGuest: boolean
+    userId?: number
+    connectedAt: number
+    currentPage: string
+  }> = []
+
+  connectedUsers.forEach((user) => {
+    users.push({
+      socketId: user.socketId,
+      username: user.username,
+      avatarColor: user.avatarColor,
+      avatarImage: user.avatarImage,
+      isGuest: user.isGuest,
+      userId: user.userId,
+      connectedAt: user.connectedAt,
+      currentPage: user.currentPage,
+    })
+  })
+
+  // Sort by connection time (oldest first)
+  return users.sort((a, b) => a.connectedAt - b.connectedAt)
 }

@@ -81,6 +81,7 @@ interface SocketContextType {
   clearHighScoreAnnouncement: () => void
   addTickerMessage: (text: string, type?: TickerMessage['type'], priority?: 'high' | 'low') => void
   removeTickerMessage: (id: number) => void
+  updatePage: (page: string) => void
 }
 
 const SocketContext = createContext<SocketContextType | undefined>(undefined)
@@ -146,6 +147,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
         token: token || undefined,
         guestUsername: user.isGuest ? user.username : undefined,
         avatarColor: user.avatarColor,
+        currentPage: window.location.pathname,
       },
     })
 
@@ -343,9 +345,15 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     setHighScoreAnnouncement(null)
   }
 
+  const updatePage = useCallback((page: string) => {
+    if (socket) {
+      socket.emit('page:update', { page })
+    }
+  }, [socket])
+
   return (
     <SocketContext.Provider
-      value={{ socket, isConnected, messages, onlineUsers, chatStatus, maintenance, registrationsPaused, announcement, highScoreAnnouncement, messageRateLimitMs, canSendAt, tickerMessages, sendMessage, deleteMessage, editMessage, clearAnnouncement, clearHighScoreAnnouncement, addTickerMessage, removeTickerMessage }}
+      value={{ socket, isConnected, messages, onlineUsers, chatStatus, maintenance, registrationsPaused, announcement, highScoreAnnouncement, messageRateLimitMs, canSendAt, tickerMessages, sendMessage, deleteMessage, editMessage, clearAnnouncement, clearHighScoreAnnouncement, addTickerMessage, removeTickerMessage, updatePage }}
     >
       {children}
     </SocketContext.Provider>

@@ -7,7 +7,7 @@ import fs from 'fs'
 import { fileURLToPath } from 'url'
 import { query, queryOne, execute, User, AuditLog, WordFilter, Message, GameSession, AvatarChange } from '../db/schema.js'
 import { authenticateToken, generateToken } from '../middleware/auth.js'
-import { broadcastChatStatus, broadcastAvatarChange, broadcastUsernameChange, broadcastChatClear, broadcastAnnouncement, broadcastMaintenanceMode, broadcastRegistrationStatus, getMessageRateLimit, setMessageRateLimit, reloadWordFilter, broadcastMessageDelete, broadcastAvatarImageChange } from '../socket/chat.js'
+import { broadcastChatStatus, broadcastAvatarChange, broadcastUsernameChange, broadcastChatClear, broadcastAnnouncement, broadcastMaintenanceMode, broadcastRegistrationStatus, getMessageRateLimit, setMessageRateLimit, reloadWordFilter, broadcastMessageDelete, broadcastAvatarImageChange, getConnectedUsersDetailed } from '../socket/chat.js'
 import { generateVerificationCode, sendVerificationEmail } from '../utils/email.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -1193,6 +1193,24 @@ router.get('/admin/stats', authenticateToken, async (req, res) => {
     })
   } catch (error) {
     console.error('Admin stats error:', error)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+// Admin: Get connected users (real-time socket connections)
+router.get('/admin/connected-users', authenticateToken, async (req, res) => {
+  try {
+    const adminId = req.user!.userId
+    const admin = await queryOne<User>('SELECT is_admin FROM users WHERE id = $1', [adminId])
+    if (!admin || admin.is_admin !== 1) {
+      res.status(403).json({ message: 'Admin access required' })
+      return
+    }
+
+    const connectedUsers = getConnectedUsersDetailed()
+    res.json({ users: connectedUsers })
+  } catch (error) {
+    console.error('Admin connected users error:', error)
     res.status(500).json({ message: 'Server error' })
   }
 })

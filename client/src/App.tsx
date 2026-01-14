@@ -1,8 +1,22 @@
-import { Routes, Route } from 'react-router-dom'
+import { useEffect } from 'react'
+import { Routes, Route, useLocation } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
+import { useSocket } from './context/SocketContext'
 import { useDeviceType } from './hooks/useDeviceType'
 import DesktopApp from './layouts/DesktopApp'
 import MobileApp from './layouts/MobileApp'
+
+// Component to track page navigation and notify server
+function PageTracker() {
+  const location = useLocation()
+  const { updatePage } = useSocket()
+
+  useEffect(() => {
+    updatePage(location.pathname)
+  }, [location.pathname, updatePage])
+
+  return null
+}
 
 function App() {
   const { isLoading, loadingProgress, loadingStatus } = useAuth()
@@ -30,9 +44,12 @@ function App() {
   }
 
   return (
-    <Routes>
-      <Route path="*" element={isMobile ? <MobileApp /> : <DesktopApp />} />
-    </Routes>
+    <>
+      <PageTracker />
+      <Routes>
+        <Route path="*" element={isMobile ? <MobileApp /> : <DesktopApp />} />
+      </Routes>
+    </>
   )
 }
 

@@ -69,6 +69,17 @@ interface Stats {
   games: { activeSessions: number; playedToday: number }
 }
 
+interface ConnectedUser {
+  socketId: string
+  username: string
+  avatarColor: string
+  avatarImage: string | null
+  isGuest: boolean
+  userId?: number
+  connectedAt: number
+  currentPage: string
+}
+
 interface HighScore {
   id: number
   user_id: number
@@ -98,6 +109,7 @@ export default function Admin() {
   // Overview/Dashboard
   const [stats, setStats] = useState<Stats | null>(null)
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([])
+  const [connectedUsers, setConnectedUsers] = useState<ConnectedUser[]>([])
 
   // Users
   const [users, setUsers] = useState<User[]>([])
@@ -251,6 +263,18 @@ export default function Admin() {
     } catch { /* ignore */ }
   }, [token])
 
+  const fetchConnectedUsers = useCallback(async () => {
+    try {
+      const res = await fetch('/api/auth/admin/connected-users', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setConnectedUsers(data.users)
+      }
+    } catch { /* ignore */ }
+  }, [token])
+
   useEffect(() => {
     if (!user?.isAdmin) {
       navigate('/')
@@ -260,7 +284,12 @@ export default function Admin() {
     fetchUsers()
     fetchSettings()
     fetchAuditLog()
-  }, [user, navigate, fetchStats, fetchUsers, fetchSettings, fetchAuditLog])
+    fetchConnectedUsers()
+
+    // Auto-refresh connected users every 5 seconds
+    const interval = setInterval(fetchConnectedUsers, 5000)
+    return () => clearInterval(interval)
+  }, [user, navigate, fetchStats, fetchUsers, fetchSettings, fetchAuditLog, fetchConnectedUsers])
 
   useEffect(() => {
     if (activeTab === 'content') {
@@ -515,6 +544,26 @@ export default function Admin() {
     return `${days}d ago`
   }
 
+  const formatDuration = (connectedAt: number) => {
+    const diff = Date.now() - connectedAt
+    const secs = Math.floor(diff / 1000)
+    if (secs < 60) return `${secs}s`
+    const mins = Math.floor(secs / 60)
+    if (mins < 60) return `${mins}m ${secs % 60}s`
+    const hours = Math.floor(mins / 60)
+    return `${hours}h ${mins % 60}m`
+  }
+
+  const formatPage = (path: string) => {
+    if (path === '/') return 'Home'
+    if (path === '/admin') return 'Admin'
+    if (path === '/profile') return 'Profile'
+    if (path === '/chat') return 'Chat'
+    if (path.startsWith('/game/')) return `Game: ${path.split('/')[2]}`
+    if (path.startsWith('/games')) return 'Games'
+    return path
+  }
+
   if (!user?.isAdmin) return null
 
   return (
@@ -578,6 +627,52 @@ export default function Admin() {
                 <span className="status-label">Maintenance: <strong>{maintenanceEnabled ? 'On' : 'Off'}</strong></span>
               </div>
             </div>
+          </div>
+
+          <div className="admin-card">
+            <div className="admin-card-header">
+              <h2>Connected Users ({connectedUsers.length})</h2>
+              <button className="btn btn-sm btn-secondary" onClick={fetchConnectedUsers}>Refresh</button>
+            </div>
+            {connectedUsers.length === 0 ? <div className="empty">No users connected</div> : (
+              <div className="admin-table-wrap">
+                <table className="admin-tbl">
+                  <thead>
+                    <tr>
+                      <th>User</th>
+                      <th>Type</th>
+                      <th>Current Page</th>
+                      <th>Connected</th>
+                      <th>Duration</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {connectedUsers.map(u => (
+                      <tr key={u.socketId}>
+                        <td>
+                          <div className="user-cell">
+                            {u.avatarImage ? (
+                              <img className="avatar" src={u.avatarImage} alt="" />
+                            ) : (
+                              <span className="avatar" style={{ backgroundColor: u.avatarColor }} />
+                            )}
+                            <span>{u.username}</span>
+                          </div>
+                        </td>
+                        <td>
+                          <span className={`badge ${u.isGuest ? 'muted' : 'active'}`}>
+                            {u.isGuest ? 'Guest' : 'User'}
+                          </span>
+                        </td>
+                        <td>{formatPage(u.currentPage)}</td>
+                        <td className="muted-text">{new Date(u.connectedAt).toLocaleTimeString()}</td>
+                        <td className="muted-text">{formatDuration(u.connectedAt)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
 
           <div className="admin-card">
