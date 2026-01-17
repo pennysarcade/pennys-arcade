@@ -37,6 +37,8 @@ export default function ChatSidebar({ onRegisterClick, width, activeTab, onTabCh
   const isAtBottomRef = useRef(true)
   const previousScrollHeightRef = useRef(0)
   const wasLoadingMoreRef = useRef(false)
+  const savedScrollPositionRef = useRef<number | null>(null)
+  const previousTabRef = useRef(activeTab)
   const [editingMessageId, setEditingMessageId] = useState<number | null>(null)
   const [editValue, setEditValue] = useState('')
   const editInputRef = useRef<HTMLInputElement>(null)
@@ -61,6 +63,25 @@ export default function ChatSidebar({ onRegisterClick, width, activeTab, onTabCh
     return () => clearInterval(interval)
   }, [canSendAt])
 
+
+  // Save scroll position when switching away from chat tab
+  useEffect(() => {
+    if (previousTabRef.current === 'chat' && activeTab !== 'chat') {
+      // Leaving chat tab - save scroll position
+      if (messagesContainerRef.current) {
+        savedScrollPositionRef.current = messagesContainerRef.current.scrollTop
+      }
+    }
+    previousTabRef.current = activeTab
+  }, [activeTab])
+
+  // Restore scroll position when returning to chat tab
+  useLayoutEffect(() => {
+    if (activeTab === 'chat' && savedScrollPositionRef.current !== null && messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = savedScrollPositionRef.current
+      savedScrollPositionRef.current = null
+    }
+  }, [activeTab])
 
   // Initial scroll to bottom - useLayoutEffect to prevent visual jump
   useLayoutEffect(() => {
