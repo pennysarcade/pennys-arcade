@@ -35,18 +35,7 @@ export const GAMES: Game[] = [
 ]
 ```
 
-And to `client/src/pages/Game.tsx`:
-
-```tsx
-const GAME_CONFIGS: Record<string, GameConfig> = {
-  // ... existing games
-  'your-game-id': {
-    title: 'Your Game Title',
-    description: 'Short tagline for your game',
-    path: '/games/your-game-id/index.html'
-  }
-}
-```
+That's it! The game page (`Game.tsx`) automatically picks up games from this array. The game will be playable at `/game/your-game-id` and expects an `index.html` at `/games/your-game-id/index.html`.
 
 ## Integration Protocol
 
