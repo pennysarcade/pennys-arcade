@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useLayoutEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { useSocket } from '../../context/SocketContext'
 import OnlineUsersList from './OnlineUsersList'
@@ -62,10 +62,18 @@ export default function ChatSidebar({ onRegisterClick, width, activeTab, onTabCh
   }, [canSendAt])
 
 
-  // Handle scroll position restoration when loading more messages
+  // Initial scroll to bottom - useLayoutEffect to prevent visual jump
+  useLayoutEffect(() => {
+    if (isInitialRender.current && messages.length > 0) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'instant' })
+      isInitialRender.current = false
+    }
+  }, [messages.length > 0])
+
+  // Handle scroll position restoration when loading more messages and new message auto-scroll
   useEffect(() => {
     const container = messagesContainerRef.current
-    if (!container) return
+    if (!container || isInitialRender.current) return
 
     if (wasLoadingMoreRef.current && !isLoadingMore) {
       // Restore scroll position after prepending messages
@@ -73,10 +81,9 @@ export default function ChatSidebar({ onRegisterClick, width, activeTab, onTabCh
       const scrollDiff = newScrollHeight - previousScrollHeightRef.current
       container.scrollTop = scrollDiff
       wasLoadingMoreRef.current = false
-    } else if (isAtBottomRef.current || isInitialRender.current) {
+    } else if (isAtBottomRef.current) {
       // Auto-scroll to bottom for new messages (only if user was at bottom)
-      messagesEndRef.current?.scrollIntoView({ behavior: isInitialRender.current ? 'instant' : 'smooth' })
-      isInitialRender.current = false
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
   }, [messages, isLoadingMore])
 
