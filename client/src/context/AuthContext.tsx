@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
 
 interface User {
   id: number
@@ -390,11 +390,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const setGuestUsername = (username: string) => {
-    if (user?.isGuest) {
-      setUser({ ...user, username })
-    }
-  }
+  const setGuestUsername = useCallback((username: string) => {
+    setUser(currentUser => {
+      if (currentUser?.isGuest) {
+        return { ...currentUser, username }
+      }
+      return currentUser
+    })
+  }, [])
 
   return (
     <AuthContext.Provider

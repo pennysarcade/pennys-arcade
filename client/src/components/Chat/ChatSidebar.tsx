@@ -37,8 +37,6 @@ export default function ChatSidebar({ onRegisterClick, width, activeTab, onTabCh
   const isAtBottomRef = useRef(true)
   const previousScrollHeightRef = useRef(0)
   const wasLoadingMoreRef = useRef(false)
-  const savedScrollPositionRef = useRef<number | null>(null)
-  const previousTabRef = useRef(activeTab)
   const [editingMessageId, setEditingMessageId] = useState<number | null>(null)
   const [editValue, setEditValue] = useState('')
   const editInputRef = useRef<HTMLInputElement>(null)
@@ -63,25 +61,6 @@ export default function ChatSidebar({ onRegisterClick, width, activeTab, onTabCh
     return () => clearInterval(interval)
   }, [canSendAt])
 
-
-  // Save scroll position when switching away from chat tab
-  useEffect(() => {
-    if (previousTabRef.current === 'chat' && activeTab !== 'chat') {
-      // Leaving chat tab - save scroll position
-      if (messagesContainerRef.current) {
-        savedScrollPositionRef.current = messagesContainerRef.current.scrollTop
-      }
-    }
-    previousTabRef.current = activeTab
-  }, [activeTab])
-
-  // Restore scroll position when returning to chat tab
-  useLayoutEffect(() => {
-    if (activeTab === 'chat' && savedScrollPositionRef.current !== null && messagesContainerRef.current) {
-      messagesContainerRef.current.scrollTop = savedScrollPositionRef.current
-      savedScrollPositionRef.current = null
-    }
-  }, [activeTab])
 
   // Initial scroll to bottom - useLayoutEffect to prevent visual jump
   useLayoutEffect(() => {
@@ -210,9 +189,8 @@ export default function ChatSidebar({ onRegisterClick, width, activeTab, onTabCh
           variant="sidebar"
         />
       </div>
-      {activeTab === 'chat' ? (
-        <>
-          {announcement && (
+      <div className="chat-tab-content" style={{ display: activeTab === 'chat' ? 'flex' : 'none', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+        {announcement && (
             <div className="announcement-banner">
               <span className="announcement-icon">📢</span>
               <span className="announcement-text">{announcement.message}</span>
@@ -411,10 +389,10 @@ export default function ChatSidebar({ onRegisterClick, width, activeTab, onTabCh
               </form>
             )}
           </div>
-        </>
-      ) : (
+        </div>
+      <div style={{ display: activeTab === 'users' ? 'flex' : 'none', flex: 1, minHeight: 0 }}>
         <OnlineUsersList />
-      )}
+      </div>
     </div>
   )
 }
