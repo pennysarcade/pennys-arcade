@@ -636,6 +636,11 @@ export async function setupChatSocket(io: Server) {
 
     connectedUsers.set(socket.id, user)
 
+    // Send assigned username to guest users (they only have a placeholder on connect)
+    if (user.isGuest) {
+      socket.emit('user:info', { username: user.username })
+    }
+
     // Fetch location asynchronously (don't block connection)
     fetchLocation(clientIp).then(location => {
       const existing = connectedUsers.get(socket.id)

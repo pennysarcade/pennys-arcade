@@ -2,6 +2,10 @@ import { createContext, useContext, useEffect, useState, useCallback, ReactNode 
 import { io, Socket } from 'socket.io-client'
 import { useAuth } from './AuthContext'
 
+interface UserInfo {
+  username: string
+}
+
 interface ReplyInfo {
   id: string
   username: string
@@ -92,7 +96,7 @@ interface SocketContextType {
 const SocketContext = createContext<SocketContextType | undefined>(undefined)
 
 export function SocketProvider({ children }: { children: ReactNode }) {
-  const { user, token } = useAuth()
+  const { user, token, setGuestUsername } = useAuth()
   const [socket, setSocket] = useState<Socket | null>(null)
   const [isConnected, setIsConnected] = useState(false)
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -166,6 +170,13 @@ export function SocketProvider({ children }: { children: ReactNode }) {
 
     newSocket.on('disconnect', () => {
       setIsConnected(false)
+    })
+
+    // Receive assigned username for guest users
+    newSocket.on('user:info', (data: UserInfo) => {
+      if (data.username) {
+        setGuestUsername(data.username)
+      }
     })
 
     newSocket.on('chat:history', (data: { messages: ChatMessage[]; hasMore: boolean; oldestLoadedId: number | null }) => {
@@ -335,7 +346,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     return () => {
       newSocket.close()
     }
-  }, [user?.id, user?.username, token])
+  }, [user?.id, token, setGuestUsername])
 
   const sendMessage = (text: string, replyToId?: string) => {
     const canSend = socket && text.trim() && (!user?.isGuest || guestChatEnabled)

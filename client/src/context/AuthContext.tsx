@@ -31,6 +31,7 @@ interface AuthContextType {
   updateProfile: (username: string, avatarColor: string) => Promise<void>
   uploadAvatar: (file: File, cropPosition?: string) => Promise<{ avatarImage: string; changesRemaining: number }>
   deleteAvatar: () => Promise<void>
+  setGuestUsername: (username: string) => void
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -389,9 +390,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  const setGuestUsername = (username: string) => {
+    if (user?.isGuest) {
+      setUser({ ...user, username })
+    }
+  }
+
   return (
     <AuthContext.Provider
-      value={{ user, token, isLoading, loadingProgress, loadingStatus, pendingVerification, login, register, verifyEmail, resendVerificationCode, cancelVerification, logout, updateProfile, uploadAvatar, deleteAvatar }}
+      value={{ user, token, isLoading, loadingProgress, loadingStatus, pendingVerification, login, register, verifyEmail, resendVerificationCode, cancelVerification, logout, updateProfile, uploadAvatar, deleteAvatar, setGuestUsername }}
     >
       {children}
     </AuthContext.Provider>
