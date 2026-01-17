@@ -39,6 +39,7 @@ export default function MobileChat() {
   const [cooldownRemaining, setCooldownRemaining] = useState(0)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const isInitialRender = useRef(true)
   const inputRef = useRef<HTMLInputElement>(null)
   const editInputRef = useRef<HTMLInputElement>(null)
 
@@ -57,7 +58,8 @@ export default function MobileChat() {
   }, [canSendAt])
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    messagesEndRef.current?.scrollIntoView({ behavior: isInitialRender.current ? 'instant' : 'smooth' })
+    isInitialRender.current = false
   }, [messages])
 
   useEffect(() => {

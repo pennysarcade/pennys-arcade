@@ -32,6 +32,7 @@ export default function ChatSidebar({ onRegisterClick, width, activeTab, onTabCh
   ]
   const [inputValue, setInputValue] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const isInitialRender = useRef(true)
   const [editingMessageId, setEditingMessageId] = useState<number | null>(null)
   const [editValue, setEditValue] = useState('')
   const editInputRef = useRef<HTMLInputElement>(null)
@@ -58,7 +59,8 @@ export default function ChatSidebar({ onRegisterClick, width, activeTab, onTabCh
 
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    messagesEndRef.current?.scrollIntoView({ behavior: isInitialRender.current ? 'instant' : 'smooth' })
+    isInitialRender.current = false
   }, [messages])
 
   useEffect(() => {
