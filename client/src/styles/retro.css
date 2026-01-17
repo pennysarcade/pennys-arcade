@@ -34,8 +34,7 @@ body {
   background-color: var(--bg-dark);
   color: var(--text-primary);
   line-height: 1.4;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: hidden;
 }
 
 /* CRT Scanline Overlay */
