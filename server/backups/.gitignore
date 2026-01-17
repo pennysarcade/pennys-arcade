@@ -1,0 +1,3 @@
+# Ignore backup files (contain user data)
+*.json
+!.gitkeep

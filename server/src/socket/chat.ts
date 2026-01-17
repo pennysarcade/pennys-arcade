@@ -271,6 +271,10 @@ const connectedUsers = new Map<string, ConnectedUser>()
 const recentMessages: ChatMessage[] = []
 const lastMessageTime = new Map<string, number>()
 const MAX_RECENT_MESSAGES = 2048
+
+// Pagination constants
+const INITIAL_LOAD_SIZE = 100
+const LOAD_MORE_SIZE = 50
 let messageRateLimitMs = 1000 // Default: 1 message per second (loaded from DB on startup)
 let guestChatEnabled = false // Default: guests cannot chat (loaded from DB on startup)
 
@@ -450,6 +454,37 @@ interface MessageWithReply extends Message {
   reply_current_avatar_color?: string
 }
 
+// Load older messages from database (for pagination beyond cache)
+async function loadOlderMessagesFromDb(beforeId: number, limit: number): Promise<ChatMessage[]> {
+  const messages = await query<MessageWithReply>(`
+    SELECT m.*,
+           u.username as current_username,
+           u.avatar_color as current_avatar_color,
+           u.avatar_image as current_avatar_image,
+           u.is_admin as current_is_admin,
+           r.username as reply_username,
+           r.content as reply_content,
+           ru.username as reply_current_username
+    FROM messages m
+    LEFT JOIN users u ON m.user_id = u.id
+    LEFT JOIN messages r ON m.reply_to_id = r.id
+    LEFT JOIN users ru ON r.user_id = ru.id
+    WHERE m.id < $1
+    ORDER BY m.id DESC
+    LIMIT $2
+  `, [beforeId, limit])
+
+  return messages.reverse().map(formatMessage)
+}
+
+// Check if there are older messages in DB than the oldest cached message
+async function checkOlderMessagesExist(beforeId: number): Promise<boolean> {
+  const result = await queryOne<{ count: string }>(`
+    SELECT COUNT(*) as count FROM messages WHERE id < $1
+  `, [beforeId])
+  return result ? parseInt(result.count) > 0 : false
+}
+
 function formatMessage(msg: MessageWithReply): ChatMessage {
   // Use current username from users table if available (for registered users)
   // Fall back to stored username (for guests or if user was deleted)
@@ -614,8 +649,16 @@ export async function setupChatSocket(io: Server) {
       updateLastActive(user.userId).catch(() => {})
     }
 
-    // Send chat history to new user
-    socket.emit('chat:history', recentMessages)
+    // Send chat history to new user (paginated)
+    const initialMessages = recentMessages.slice(-INITIAL_LOAD_SIZE)
+    const oldestLoadedId = initialMessages.length > 0 ? parseInt(initialMessages[0].id) : null
+    const hasMore = recentMessages.length > INITIAL_LOAD_SIZE ||
+      (oldestLoadedId !== null && await checkOlderMessagesExist(oldestLoadedId))
+    socket.emit('chat:history', {
+      messages: initialMessages,
+      hasMore,
+      oldestLoadedId
+    })
 
     // Send current chat status
     const chatStatus = await getChatStatus()
@@ -628,6 +671,54 @@ export async function setupChatSocket(io: Server) {
     io.emit('chat:users', getOnlineUsersList())
 
     console.log(`User connected: ${user.username} (${user.isGuest ? 'guest' : 'registered'})`)
+
+    // Handle loading more messages (pagination)
+    socket.on('chat:load-more', async (data: { beforeId: number }) => {
+      if (!data.beforeId) return
+
+      try {
+        // First, check if we have older messages in the cache
+        const cacheIndex = recentMessages.findIndex(m => parseInt(m.id) === data.beforeId)
+        let messagesToSend: ChatMessage[] = []
+        let hasMore = false
+        let oldestLoadedId: number | null = null
+
+        if (cacheIndex > 0) {
+          // We have older messages in cache
+          const startIndex = Math.max(0, cacheIndex - LOAD_MORE_SIZE)
+          messagesToSend = recentMessages.slice(startIndex, cacheIndex)
+          oldestLoadedId = messagesToSend.length > 0 ? parseInt(messagesToSend[0].id) : null
+
+          // Check if there are even more messages
+          if (startIndex > 0) {
+            hasMore = true
+          } else if (oldestLoadedId !== null) {
+            hasMore = await checkOlderMessagesExist(oldestLoadedId)
+          }
+        } else {
+          // Need to load from database
+          messagesToSend = await loadOlderMessagesFromDb(data.beforeId, LOAD_MORE_SIZE)
+          oldestLoadedId = messagesToSend.length > 0 ? parseInt(messagesToSend[0].id) : null
+
+          if (oldestLoadedId !== null) {
+            hasMore = await checkOlderMessagesExist(oldestLoadedId)
+          }
+        }
+
+        socket.emit('chat:load-more-response', {
+          messages: messagesToSend,
+          hasMore,
+          oldestLoadedId
+        })
+      } catch (error) {
+        console.error('Failed to load more messages:', error)
+        socket.emit('chat:load-more-response', {
+          messages: [],
+          hasMore: false,
+          oldestLoadedId: null
+        })
+      }
+    })
 
     // Handle incoming messages
     socket.on('chat:send', async (data: { text: string; replyToId?: string }) => {

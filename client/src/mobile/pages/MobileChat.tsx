@@ -27,6 +27,9 @@ export default function MobileChat() {
     canSendAt,
     onlineUsers,
     isConnected,
+    hasMoreMessages,
+    isLoadingMore,
+    loadMoreMessages,
   } = useSocket()
 
   const [inputValue, setInputValue] = useState('')
@@ -39,7 +42,11 @@ export default function MobileChat() {
   const [cooldownRemaining, setCooldownRemaining] = useState(0)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
   const isInitialRender = useRef(true)
+  const isAtBottomRef = useRef(true)
+  const previousScrollHeightRef = useRef(0)
+  const wasLoadingMoreRef = useRef(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const editInputRef = useRef<HTMLInputElement>(null)
 
@@ -57,10 +64,46 @@ export default function MobileChat() {
     return () => clearInterval(interval)
   }, [canSendAt])
 
+  // Handle scroll position restoration when loading more messages
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: isInitialRender.current ? 'instant' : 'smooth' })
-    isInitialRender.current = false
-  }, [messages])
+    const container = messagesContainerRef.current
+    if (!container) return
+
+    if (wasLoadingMoreRef.current && !isLoadingMore) {
+      // Restore scroll position after prepending messages
+      const newScrollHeight = container.scrollHeight
+      const scrollDiff = newScrollHeight - previousScrollHeightRef.current
+      container.scrollTop = scrollDiff
+      wasLoadingMoreRef.current = false
+    } else if (isAtBottomRef.current || isInitialRender.current) {
+      // Auto-scroll to bottom for new messages (only if user was at bottom)
+      messagesEndRef.current?.scrollIntoView({ behavior: isInitialRender.current ? 'instant' : 'smooth' })
+      isInitialRender.current = false
+    }
+  }, [messages, isLoadingMore])
+
+  // Track when loading starts to save scroll position
+  useEffect(() => {
+    if (isLoadingMore && messagesContainerRef.current) {
+      previousScrollHeightRef.current = messagesContainerRef.current.scrollHeight
+      wasLoadingMoreRef.current = true
+    }
+  }, [isLoadingMore])
+
+  // Handle scroll to detect when near top and when at bottom
+  const handleScroll = () => {
+    const container = messagesContainerRef.current
+    if (!container) return
+
+    // Check if user is at bottom (with some tolerance)
+    const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 50
+    isAtBottomRef.current = isAtBottom
+
+    // Check if user scrolled near top - trigger load more
+    if (container.scrollTop < 100 && hasMoreMessages && !isLoadingMore) {
+      loadMoreMessages()
+    }
+  }
 
   useEffect(() => {
     if (editingMessageId !== null && editInputRef.current) {
@@ -135,7 +178,10 @@ export default function MobileChat() {
         </div>
       )}
 
-      <div className="mobile-chat-messages">
+      <div className="mobile-chat-messages" ref={messagesContainerRef} onScroll={handleScroll}>
+        {isLoadingMore && (
+          <div className="mobile-chat-loading-more">Loading older messages...</div>
+        )}
         {messages.length === 0 ? (
           <div className="mobile-chat-empty">
             No messages yet. Be the first to say hello!

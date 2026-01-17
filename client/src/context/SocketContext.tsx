@@ -75,6 +75,9 @@ interface SocketContextType {
   messageRateLimitMs: number
   canSendAt: number
   tickerMessages: TickerMessage[]
+  hasMoreMessages: boolean
+  isLoadingMore: boolean
+  oldestLoadedId: number | null
   sendMessage: (text: string, replyToId?: string) => void
   deleteMessage: (messageId: number) => void
   editMessage: (messageId: number, newText: string) => void
@@ -83,6 +86,7 @@ interface SocketContextType {
   addTickerMessage: (text: string, type?: TickerMessage['type'], priority?: 'high' | 'low') => void
   removeTickerMessage: (id: number) => void
   updatePage: (page: string) => void
+  loadMoreMessages: () => void
 }
 
 const SocketContext = createContext<SocketContextType | undefined>(undefined)
@@ -102,6 +106,9 @@ export function SocketProvider({ children }: { children: ReactNode }) {
   const [messageRateLimitMs, setMessageRateLimitMs] = useState(1000)
   const [canSendAt, setCanSendAt] = useState(0)
   const [tickerMessages, setTickerMessages] = useState<TickerMessage[]>([])
+  const [hasMoreMessages, setHasMoreMessages] = useState(false)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const [oldestLoadedId, setOldestLoadedId] = useState<number | null>(null)
 
   // Add a ticker message to the queue
   // Low priority messages are only added if queue is empty
@@ -161,8 +168,17 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       setIsConnected(false)
     })
 
-    newSocket.on('chat:history', (history: ChatMessage[]) => {
-      setMessages(history)
+    newSocket.on('chat:history', (data: { messages: ChatMessage[]; hasMore: boolean; oldestLoadedId: number | null }) => {
+      setMessages(data.messages)
+      setHasMoreMessages(data.hasMore)
+      setOldestLoadedId(data.oldestLoadedId)
+    })
+
+    newSocket.on('chat:load-more-response', (data: { messages: ChatMessage[]; hasMore: boolean; oldestLoadedId: number | null }) => {
+      setMessages((prev) => [...data.messages, ...prev])
+      setHasMoreMessages(data.hasMore)
+      setOldestLoadedId(data.oldestLoadedId)
+      setIsLoadingMore(false)
     })
 
     newSocket.on('chat:message', (message: ChatMessage) => {
@@ -358,9 +374,16 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     }
   }, [socket])
 
+  const loadMoreMessages = useCallback(() => {
+    if (socket && hasMoreMessages && !isLoadingMore && oldestLoadedId !== null) {
+      setIsLoadingMore(true)
+      socket.emit('chat:load-more', { beforeId: oldestLoadedId })
+    }
+  }, [socket, hasMoreMessages, isLoadingMore, oldestLoadedId])
+
   return (
     <SocketContext.Provider
-      value={{ socket, isConnected, messages, onlineUsers, chatStatus, guestChatEnabled, maintenance, registrationsPaused, announcement, highScoreAnnouncement, messageRateLimitMs, canSendAt, tickerMessages, sendMessage, deleteMessage, editMessage, clearAnnouncement, clearHighScoreAnnouncement, addTickerMessage, removeTickerMessage, updatePage }}
+      value={{ socket, isConnected, messages, onlineUsers, chatStatus, guestChatEnabled, maintenance, registrationsPaused, announcement, highScoreAnnouncement, messageRateLimitMs, canSendAt, tickerMessages, hasMoreMessages, isLoadingMore, oldestLoadedId, sendMessage, deleteMessage, editMessage, clearAnnouncement, clearHighScoreAnnouncement, addTickerMessage, removeTickerMessage, updatePage, loadMoreMessages }}
     >
       {children}
     </SocketContext.Provider>
