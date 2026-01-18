@@ -10,7 +10,7 @@ const OrbitMultiplayer = (function() {
   let inputSeq = 0;
   let lastServerState = null;
   let interpolationBuffer = [];
-  const INTERPOLATION_DELAY = 100; // ms of interpolation buffer
+  const INTERPOLATION_DELAY = 50; // ms of interpolation buffer (reduced for tighter visuals)
 
   // Callbacks
   let onStateUpdate = null;

@@ -1773,6 +1773,7 @@ window.addEventListener('keydown', (e) => {
     keysDown.counterClockwise = true;
   } else if (key === ' ' || key === 'shift') {
     // Space or Shift to switch rings
+    console.log('[ORBIT DEBUG] Space pressed, gameRunning:', gameRunning, 'mpConnected:', mpConnected, 'mpIsSpectator:', mpIsSpectator);
     if (gameRunning) {
       switchRing();
     }
@@ -3468,12 +3469,15 @@ function updateMultiplayer(dt) {
 // Override ring switch for multiplayer
 const originalSwitchRing = switchRing;
 function switchRingMultiplayer() {
+  console.log('[ORBIT DEBUG] switchRingMultiplayer called, MULTIPLAYER_MODE:', MULTIPLAYER_MODE, 'mpConnected:', mpConnected, 'mpIsSpectator:', mpIsSpectator);
   if (!MULTIPLAYER_MODE || !mpConnected || mpIsSpectator) {
+    console.log('[ORBIT DEBUG] Falling back to originalSwitchRing');
     originalSwitchRing();
     return;
   }
 
   // Send ring switch to server
+  console.log('[ORBIT DEBUG] Sending ring switch to server');
   OrbitMultiplayer.sendInput(undefined, undefined, true);
 
   // Play local feedback
@@ -3504,7 +3508,7 @@ function drawMultiplayer() {
   ctx.translate(screenShake.x, screenShake.y);
 
   // Draw arena rings
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
   ctx.lineWidth = 2;
 
   // Outer ring

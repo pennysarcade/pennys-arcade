@@ -577,16 +577,25 @@ function checkAIBotNeeded(): void {
   // Note: AI bot is removed at round end, not mid-round
 }
 
-// Update AI bot behavior
+// Update AI bot behavior - intentionally lazy to give humans a chance
 function updateAIBot(dt: number): void {
   if (!aiBotActive) return
 
   const aiPlayer = gameState.players.get(AI_BOT_ID)
   if (!aiPlayer) return
 
-  // Find the nearest threatening ball
+  // AI has random "lazy" moments where it doesn't react (30% of the time)
+  if (Math.random() < 0.3) {
+    aiPlayer.velocity = 0
+    aiPlayer.lastInputTime = Date.now()
+    aiPlayer.isInactive = false
+    return
+  }
+
+  // Find the nearest threatening ball - only react to balls past 70% of the way to edge
   let nearestBall: Ball | null = null
   let nearestDist = Infinity
+  const dangerZone = gameState.arenaRadius * 0.7 // Only react when ball is 70%+ to edge
 
   const allBalls = [...gameState.balls]
   if (gameState.specialBall) allBalls.push(gameState.specialBall)
@@ -595,6 +604,9 @@ function updateAIBot(dt: number): void {
     const dx = ball.x - gameState.centerX
     const dy = ball.y - gameState.centerY
     const dist = Math.sqrt(dx * dx + dy * dy)
+
+    // Only care about balls in the danger zone (close to edge)
+    if (dist < dangerZone) continue
 
     // Calculate if ball is heading outward
     const ballAngle = Math.atan2(dy, dx)
@@ -614,11 +626,12 @@ function updateAIBot(dt: number): void {
     const ballAngle = Math.atan2(dy, dx)
     const ballDist = Math.sqrt(dx * dx + dy * dy)
 
-    // Predict where ball will be
+    // Predict where ball will be - but with some error
     const speed = Math.sqrt(nearestBall.vx ** 2 + nearestBall.vy ** 2)
     const timeToEdge = (gameState.arenaRadius - ballDist) / speed
-    const predictedX = nearestBall.x + nearestBall.vx * timeToEdge * 0.5
-    const predictedY = nearestBall.y + nearestBall.vy * timeToEdge * 0.5
+    const predictionError = (Math.random() - 0.5) * 0.3 // Add some inaccuracy
+    const predictedX = nearestBall.x + nearestBall.vx * timeToEdge * (0.3 + predictionError)
+    const predictedY = nearestBall.y + nearestBall.vy * timeToEdge * (0.3 + predictionError)
 
     const predictedDx = predictedX - gameState.centerX
     const predictedDy = predictedY - gameState.centerY
@@ -626,9 +639,9 @@ function updateAIBot(dt: number): void {
 
     aiBotTargetAngle = predictedAngle
 
-    // Decide which ring to be on based on ball distance
+    // Decide which ring to be on - AI mostly stays on outer ring
     const targetRing = ballDist > gameState.innerRadius ? 0 : 1
-    if (targetRing !== aiBotTargetRing && aiPlayer.ringSwitchProgress <= 0) {
+    if (targetRing !== aiBotTargetRing && aiPlayer.ringSwitchProgress <= 0 && Math.random() < 0.3) {
       aiBotTargetRing = targetRing
       // Initiate ring switch
       if (aiPlayer.ring !== aiBotTargetRing) {
@@ -639,11 +652,11 @@ function updateAIBot(dt: number): void {
     }
   }
 
-  // Move towards target angle
+  // Move towards target angle - AI is slow (40% of player speed)
   const angleDiff = angleDifference(aiBotTargetAngle, aiPlayer.angle)
-  const maxMove = PADDLE_SPEED * dt * 0.8 // AI is slightly slower than max speed
+  const maxMove = PADDLE_SPEED * dt * 0.4
 
-  if (Math.abs(angleDiff) > 0.01) {
+  if (Math.abs(angleDiff) > 0.05) { // Larger deadzone before moving
     const move = Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), maxMove)
     aiPlayer.angle = normalizeAngle(aiPlayer.angle + move)
     aiPlayer.velocity = move / dt
