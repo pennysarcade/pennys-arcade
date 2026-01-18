@@ -2968,7 +2968,6 @@ function startGame() {
   initAIPaddles();
 
   scoreDisplay.textContent = '0';
-  welcomeScreen.classList.add('hidden');
   gameOverScreen.classList.add('hidden');
 
   notifyGameStart();
