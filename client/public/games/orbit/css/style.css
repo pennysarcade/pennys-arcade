@@ -296,6 +296,73 @@ button:hover {
   color: #00ff88;
 }
 
+/* Network stats display (debug) */
+#net-stats {
+  position: fixed;
+  bottom: 15px;
+  right: 15px;
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  padding: 8px 12px;
+  font-family: 'VT323', monospace;
+  font-size: 14px;
+  color: #666;
+  z-index: 50;
+}
+
+#net-stats div {
+  line-height: 1.4;
+}
+
+#net-stats span {
+  color: #888;
+}
+
+/* Connection quality indicator */
+#connection-quality {
+  position: fixed;
+  top: 15px;
+  right: 15px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 4px;
+  z-index: 50;
+}
+
+#connection-quality-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 12px;
+}
+
+.connection-bar {
+  width: 4px;
+  background: #333;
+  border-radius: 1px;
+}
+
+.connection-bar:nth-child(1) { height: 4px; }
+.connection-bar:nth-child(2) { height: 7px; }
+.connection-bar:nth-child(3) { height: 10px; }
+.connection-bar:nth-child(4) { height: 12px; }
+
+#connection-quality.excellent .connection-bar { background: #00ff88; }
+#connection-quality.good .connection-bar:nth-child(-n+3) { background: #88ff00; }
+#connection-quality.fair .connection-bar:nth-child(-n+2) { background: #ffff00; }
+#connection-quality.poor .connection-bar:nth-child(1) { background: #ff8800; }
+#connection-quality.disconnected .connection-bar { background: #ff0000; }
+
+#connection-quality-text {
+  font-family: 'VT323', monospace;
+  font-size: 12px;
+  color: #888;
+}
+
 /* Desktop/Mobile control text visibility */
 .desktop-controls {
   display: block;

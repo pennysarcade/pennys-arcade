@@ -1,5 +1,6 @@
 // === ORBIT MULTIPLAYER MODULE ===
 // Handles direct socket.io connection for multiplayer mode
+// Updated for rollback netcode support
 
 const OrbitMultiplayer = (function() {
   // State
@@ -11,6 +12,18 @@ const OrbitMultiplayer = (function() {
   let lastServerState = null;
   let interpolationBuffer = [];
   const INTERPOLATION_DELAY = 50; // ms of interpolation buffer (reduced for tighter visuals)
+
+  // Rollback netcode state
+  let predictionState = null;
+  let useRollbackNetcode = true; // Enable rollback netcode
+
+  // Reconnection state
+  let reconnectAttempts = 0;
+  const MAX_RECONNECT_ATTEMPTS = 5;
+  const RECONNECT_DELAY_BASE = 1000; // 1 second base delay
+  let reconnectTimeout = null;
+  let lastConnectionCallbacks = null;
+  let lastToken = null;
 
   // Callbacks
   let onStateUpdate = null;
@@ -159,8 +172,14 @@ const OrbitMultiplayer = (function() {
     socket.on('disconnect', (reason) => {
       console.log('[ORBIT DEBUG] Socket disconnected:', reason);
       connected = false;
-      playerId = null;
-      if (onDisconnected) onDisconnected(reason);
+
+      // Attempt auto-reconnect for recoverable disconnections
+      if (reason === 'io server disconnect' || reason === 'transport close' || reason === 'transport error') {
+        attemptReconnect(callbacks);
+      } else {
+        playerId = null;
+        if (onDisconnected) onDisconnected(reason);
+      }
     });
 
     socket.on('connect_error', (error) => {
@@ -176,15 +195,40 @@ const OrbitMultiplayer = (function() {
       if (joinTimeout) clearTimeout(joinTimeout);
       playerId = data.playerId;
       isSpectator = data.isSpectator;
+
+      // Reset reconnection state on successful join
+      reconnectAttempts = 0;
+      cancelReconnect();
+
+      // Initialize or reset rollback netcode prediction state
+      if (useRollbackNetcode && typeof OrbitNetcode !== 'undefined') {
+        if (predictionState) {
+          predictionState.reset(); // Reset on reconnect
+        } else {
+          predictionState = new OrbitNetcode.PredictionState();
+        }
+        console.log('[ORBIT DEBUG] Rollback netcode initialized');
+      }
+
       if (onJoined) onJoined(data);
     });
 
     socket.on('orbit:state', (state) => {
       // Log first state update for debugging
       if (!lastServerState) {
-        console.log('[ORBIT DEBUG] Received first orbit:state update, players:', Object.keys(state.players).length, 'balls:', state.balls.length);
+        console.log('[ORBIT DEBUG] Received first orbit:state update, frame:', state.frame, 'players:', Object.keys(state.players).length, 'balls:', state.balls.length);
       }
       lastServerState = state;
+
+      // Update rollback netcode prediction state
+      if (predictionState && useRollbackNetcode) {
+        if (!predictionState.playerId && playerId) {
+          predictionState.initialize(playerId, state);
+        } else {
+          predictionState.receiveServerState(state);
+        }
+      }
+
       // Add to interpolation buffer with timestamp
       interpolationBuffer.push({
         timestamp: Date.now(),
@@ -262,16 +306,26 @@ const OrbitMultiplayer = (function() {
     if (!socket || !connected || isSpectator) return;
 
     inputSeq++;
-    socket.emit('orbit:input', {
+
+    const input = {
       angle: angle,
       velocity: velocity,
       ringSwitch: ringSwitch || false,
-      seq: inputSeq
-    });
+      seq: inputSeq,
+      playerId: playerId
+    };
+
+    // Add to prediction state for tracking
+    if (predictionState && useRollbackNetcode) {
+      predictionState.addLocalInput(input);
+    }
+
+    socket.emit('orbit:input', input);
   }
 
   // Leave the game
   function leave() {
+    cancelReconnect(); // Cancel any pending reconnection
     if (socket) {
       socket.emit('orbit:leave');
       socket.disconnect();
@@ -279,6 +333,9 @@ const OrbitMultiplayer = (function() {
     }
     connected = false;
     playerId = null;
+    if (predictionState) {
+      predictionState.reset();
+    }
   }
 
   // Get interpolated state for smooth rendering
@@ -372,6 +429,79 @@ const OrbitMultiplayer = (function() {
     socket.emit('orbit:request_join');
   }
 
+  // Attempt to reconnect after disconnection
+  function attemptReconnect(callbacks) {
+    if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+      console.log('[ORBIT MP] Max reconnect attempts reached');
+      playerId = null;
+      if (onDisconnected) onDisconnected('Connection lost (max retries exceeded)');
+      return;
+    }
+
+    reconnectAttempts++;
+    const delay = RECONNECT_DELAY_BASE * Math.pow(1.5, reconnectAttempts - 1);
+    console.log(`[ORBIT MP] Attempting reconnect in ${delay}ms (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
+
+    // Store callbacks for reconnection
+    lastConnectionCallbacks = callbacks;
+
+    reconnectTimeout = setTimeout(() => {
+      if (socket) {
+        socket.connect();
+      } else if (lastConnectionCallbacks) {
+        // Full reconnection needed
+        connect(lastConnectionCallbacks);
+      }
+    }, delay);
+  }
+
+  // Cancel any pending reconnection
+  function cancelReconnect() {
+    if (reconnectTimeout) {
+      clearTimeout(reconnectTimeout);
+      reconnectTimeout = null;
+    }
+    reconnectAttempts = 0;
+  }
+
+  // Get network statistics from rollback netcode
+  function getNetStats() {
+    if (predictionState && useRollbackNetcode) {
+      return predictionState.getNetStats();
+    }
+    return {
+      rtt: 0,
+      jitter: 0,
+      inputDelay: 2,
+      rollbackCount: 0,
+      avgRollbackFrames: 0,
+      framesBehind: 0,
+      pendingInputs: 0
+    };
+  }
+
+  // Get display state with visual smoothing applied
+  function getDisplayState() {
+    if (predictionState && useRollbackNetcode) {
+      return predictionState.getDisplayState() || lastServerState;
+    }
+    return lastServerState;
+  }
+
+  // Update visual smoothing (call each render frame)
+  function updateVisuals() {
+    if (predictionState && useRollbackNetcode) {
+      predictionState.updateVisuals();
+    }
+  }
+
+  // Reset prediction state (e.g., on round start)
+  function resetPrediction() {
+    if (predictionState) {
+      predictionState.reset();
+    }
+  }
+
   // Public API
   return {
     connect,
@@ -380,9 +510,14 @@ const OrbitMultiplayer = (function() {
     requestJoin,
     getInterpolatedState,
     getLastState: () => lastServerState,
+    getDisplayState,
+    getNetStats,
+    updateVisuals,
+    resetPrediction,
     getPlayerId: () => playerId,
     isConnected: () => connected,
-    isSpectatorMode: () => isSpectator
+    isSpectatorMode: () => isSpectator,
+    isRollbackEnabled: () => useRollbackNetcode && predictionState !== null
   };
 })();
 

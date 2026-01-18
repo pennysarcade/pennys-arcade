@@ -1,4 +1,13 @@
 // === ORBIT MULTIPLAYER STATE TYPES AND CONSTANTS ===
+// Updated for rollback netcode with deterministic simulation
+
+import { SeededRNG, hashString } from '../../../shared/netcode/rng.js'
+import { GameSnapshot, PlayerSnapshot, BallSnapshot, PowerupSnapshot, FrameInput } from '../../../shared/netcode/types.js'
+import { calculateChecksum, cloneSnapshot } from '../../../shared/netcode/simulation.js'
+
+// Re-export for convenience
+export { SeededRNG, hashString, calculateChecksum, cloneSnapshot }
+export type { GameSnapshot, PlayerSnapshot, BallSnapshot, PowerupSnapshot, FrameInput }
 
 // Avatar colors (same as client AvatarPicker.tsx)
 export const AVATAR_COLORS = [
@@ -23,8 +32,8 @@ export function getGuestAvatarColor(guestId: string): string {
 
 // Game constants
 export const MAX_PLAYERS = 8
-export const TICK_RATE = 30 // Server tick rate in Hz
-export const TICK_INTERVAL = 1000 / TICK_RATE
+export const TICK_RATE = 60 // Server tick rate in Hz (60Hz for rollback netcode)
+export const TICK_INTERVAL = 1000 / TICK_RATE // ~16.67ms
 export const INACTIVITY_TIMEOUT = 30000 // 30 seconds
 export const MAX_ROUND_TIME = 30 * 60 * 1000 // 30 minutes safety limit
 export const PLAYER_PHASE_IN_DURATION = 1000 // 1 second fade-in for new players
@@ -171,6 +180,12 @@ export interface PlayerInput {
 
 // Game state
 export interface GameState {
+  // Frame and timing (for rollback netcode)
+  frame: number // Current simulation frame
+  rngState: number // Current RNG state for determinism
+  checksum: number // State checksum for verification
+  roundSeed: number // Seed for this round's RNG
+
   // Round info
   roundNumber: number
   roundStartTime: number
@@ -207,9 +222,12 @@ export interface GameState {
 
 // State update sent to clients
 export interface StateUpdate {
-  tick: number
+  frame: number // Frame number for rollback sync
+  checksum: number // State checksum for mismatch detection
+  tick: number // Legacy tick counter (deprecated, use frame)
   gameTime: number
   roundNumber: number
+  rngState: number // RNG state for client-side prediction
   players: Record<string, {
     angle: number
     velocity: number
@@ -234,6 +252,9 @@ export interface StateUpdate {
     isSpecial: boolean
     age: number
     spawnProgress: number
+    spin: number
+    speedMult: number
+    hitCooldown: number
   }>
   powerups: Array<{
     id: string
@@ -241,10 +262,15 @@ export interface StateUpdate {
     y: number
     type: string
     spawnProgress: number
+    vx: number
+    vy: number
   }>
   waveActive: boolean
   waveType: WaveType
   specialBallReturning: boolean
+  specialBallTimer: number
+  specialBallActiveTime: number
+  spawnTimer: number
 }
 
 // Round end data
@@ -262,7 +288,7 @@ export interface RoundEndData {
 }
 
 // Helper to create initial game state
-export function createInitialGameState(): GameState {
+export function createInitialGameState(seed?: number): GameState {
   // Use a standard canvas size for calculations
   const canvasWidth = 800
   const canvasHeight = 600
@@ -271,7 +297,16 @@ export function createInitialGameState(): GameState {
   const arenaRadius = Math.min(canvasWidth, canvasHeight) * ARENA_RADIUS_RATIO
   const innerRadius = arenaRadius * INNER_RING_RATIO
 
+  // Generate seed from timestamp if not provided
+  const roundSeed = seed ?? (Date.now() ^ Math.floor(Math.random() * 0xFFFFFFFF))
+
   return {
+    // Frame and timing (for rollback netcode)
+    frame: 0,
+    rngState: roundSeed,
+    checksum: 0,
+    roundSeed: roundSeed,
+
     roundNumber: 1,
     roundStartTime: Date.now(),
     gameTime: 0,

@@ -2978,10 +2978,88 @@ function gameLoop(timestamp) {
   const dt = Math.min((timestamp - lastTime) / 1000, 0.1); // Cap delta time
   lastTime = timestamp;
 
+  // Update rollback netcode visual smoothing
+  if (typeof OrbitMultiplayer !== 'undefined' && OrbitMultiplayer.isRollbackEnabled && OrbitMultiplayer.isRollbackEnabled()) {
+    OrbitMultiplayer.updateVisuals();
+  }
+
   update(dt);
   draw();
 
+  // Update network stats display (every 30 frames = ~0.5s)
+  if (gameLoopFrameCount % 30 === 0 && mpConnected) {
+    updateNetStatsDisplay();
+  }
+
   requestAnimationFrame(gameLoop);
+}
+
+// Update network stats display
+function updateNetStatsDisplay() {
+  if (typeof OrbitMultiplayer === 'undefined') return;
+
+  const netStats = OrbitMultiplayer.getNetStats();
+  const netStatsEl = document.getElementById('net-stats');
+  const rttEl = document.getElementById('net-rtt');
+  const jitterEl = document.getElementById('net-jitter');
+  const rollbacksEl = document.getElementById('net-rollbacks');
+
+  if (netStatsEl && netStats) {
+    // Show stats display only if rollback is enabled
+    if (OrbitMultiplayer.isRollbackEnabled && OrbitMultiplayer.isRollbackEnabled()) {
+      netStatsEl.classList.remove('hidden');
+      if (rttEl) rttEl.textContent = Math.round(netStats.rtt || 0);
+      if (jitterEl) jitterEl.textContent = Math.round(netStats.jitter || 0);
+      if (rollbacksEl) rollbacksEl.textContent = netStats.rollbackCount || 0;
+    }
+  }
+
+  // Update connection quality indicator
+  updateConnectionQuality(netStats);
+}
+
+// Update connection quality indicator based on network stats
+function updateConnectionQuality(netStats) {
+  const qualityEl = document.getElementById('connection-quality');
+  const qualityText = document.getElementById('connection-quality-text');
+
+  if (!qualityEl || !mpConnected) {
+    if (qualityEl) qualityEl.classList.add('hidden');
+    return;
+  }
+
+  qualityEl.classList.remove('hidden');
+
+  // Determine quality based on RTT and jitter
+  const rtt = netStats?.rtt || 0;
+  const jitter = netStats?.jitter || 0;
+  const rollbacks = netStats?.rollbackCount || 0;
+
+  // Remove all quality classes
+  qualityEl.classList.remove('excellent', 'good', 'fair', 'poor', 'disconnected');
+
+  let quality = 'excellent';
+  let qualityLabel = '';
+
+  if (rtt < 30 && jitter < 10 && rollbacks === 0) {
+    quality = 'excellent';
+    qualityLabel = Math.round(rtt) + 'ms';
+  } else if (rtt < 60 && jitter < 20 && rollbacks < 3) {
+    quality = 'good';
+    qualityLabel = Math.round(rtt) + 'ms';
+  } else if (rtt < 100 && jitter < 40) {
+    quality = 'fair';
+    qualityLabel = Math.round(rtt) + 'ms';
+  } else if (rtt < 200) {
+    quality = 'poor';
+    qualityLabel = Math.round(rtt) + 'ms';
+  } else {
+    quality = 'disconnected';
+    qualityLabel = 'LAG';
+  }
+
+  qualityEl.classList.add(quality);
+  if (qualityText) qualityText.textContent = qualityLabel;
 }
 
 // === GAME STATE ===
@@ -3251,11 +3329,14 @@ function handleMPStateUpdate(state) {
 
   mpServerState = state;
 
+  // Get display state (with visual smoothing from rollback netcode if available)
+  const displayState = OrbitMultiplayer.getDisplayState() || state;
+
   // Update other players
   mpOtherPlayers = {};
-  for (const id in state.players) {
+  for (const id in displayState.players) {
     if (id !== mpPlayerId) {
-      mpOtherPlayers[id] = state.players[id];
+      mpOtherPlayers[id] = displayState.players[id];
     }
   }
 

@@ -24,18 +24,34 @@ The `{game-id}` must be lowercase, alphanumeric with hyphens (e.g., `tessles`, `
 Add your game to `client/src/components/Games/ArcadeGrid.tsx`:
 
 ```tsx
-export const GAMES: Game[] = [
+export const GAMES: GameConfig[] = [
   // ... existing games
   {
     id: 'your-game-id',
     title: 'Your Game Title',
     description: 'Short tagline for your game',
-    status: 'available'  // or 'coming-soon'
+    banner: '/games/your-game-id/banner.jpg',
+    video: '/games/your-game-id/banner.webm',
+    platforms: 'both',  // 'both' | 'desktop' | 'mobile'
   }
 ]
 ```
 
-That's it! The game page (`Game.tsx`) automatically picks up games from this array. The game will be playable at `/game/your-game-id` and expects an `index.html` at `/games/your-game-id/index.html`.
+### GameConfig Options
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `id` | `string` | Unique game identifier (required) |
+| `title` | `string` | Display name (required) |
+| `description` | `string` | Short tagline (required) |
+| `banner` | `string` | Path to banner.jpg (optional) |
+| `video` | `string` | Path to banner.webm (optional) |
+| `platforms` | `'both' \| 'desktop' \| 'mobile'` | Platform availability (defaults to 'both') |
+| `requiresAuth` | `boolean` | Requires registered user, not guest (optional) |
+| `multiplayer` | `boolean` | Has real-time multiplayer lobby (optional) |
+| `maxPlayers` | `number` | Max players for multiplayer games (optional) |
+
+That's it! The game page automatically picks up games from this array. The game will be playable at `/game/your-game-id` and expects an `index.html` at `/games/your-game-id/index.html`.
 
 ## Integration Protocol
 
@@ -114,6 +130,30 @@ function notifyScoreUpdate(score, stats) {
 }
 ```
 
+### Optional: Ticker Messages
+
+Send messages to the game page's ticker display for achievements or announcements:
+
+```js
+function sendTickerMessage(message, level = 'info', priority = null) {
+  if (window.parent !== window) {
+    window.parent.postMessage({
+      type: 'TICKER_MESSAGE',
+      game: 'your-game-id',
+      message: message,
+      level: level,      // 'info' or 'celebration'
+      priority: priority // 'low' = skipped when queue is busy
+    }, '*');
+  }
+}
+
+// Examples
+sendTickerMessage('Shield collected!', 'info', 'low');
+sendTickerMessage('BLACK HOLE READY! Press [B] to deploy!', 'celebration');
+```
+
+Use `priority: 'low'` for frequent messages (like powerup pickups) that can be skipped when the ticker queue is busy. Reserve `'celebration'` level for significant achievements.
+
 ## Complete Integration Example
 
 ```js
@@ -186,6 +226,36 @@ function endGame() {
   // ... show game over screen
 }
 ```
+
+## Mobile Support
+
+Games are loaded with a `?mobile=true` URL parameter when running on mobile devices. Use this to adapt your game's input handling:
+
+```js
+const isMobile = new URLSearchParams(window.location.search).get('mobile') === 'true';
+
+if (isMobile) {
+  // Use touch events instead of mouse
+  canvas.addEventListener('touchstart', handleTouchStart);
+  canvas.addEventListener('touchmove', handleTouchMove);
+  canvas.addEventListener('touchend', handleTouchEnd);
+
+  // Show mobile-specific UI (e.g., on-screen buttons)
+  document.getElementById('mobile-controls').style.display = 'block';
+} else {
+  // Desktop: use mouse/keyboard
+  canvas.addEventListener('mousemove', handleMouseMove);
+  canvas.addEventListener('click', handleClick);
+}
+```
+
+### Mobile Best Practices
+
+- Use `touch-action: manipulation` CSS to prevent delays
+- Provide larger touch targets for buttons
+- Consider adding on-screen controls for actions that use keyboard on desktop
+- Test on both portrait and landscape orientations
+- Platform (desktop/mobile) is tracked separately in game sessions and scores
 
 ## Scoring Balance Guidelines
 
@@ -268,7 +338,7 @@ ctx.imageSmoothingEnabled = false;
 Before submitting your game:
 
 - [ ] Directory structure follows the template
-- [ ] Game registered in `ArcadeGrid.tsx` and `Game.tsx`
+- [ ] Game registered in `ArcadeGrid.tsx` with all required fields
 - [ ] `HIGH_SCORE_DATA` listener implemented
 - [ ] `GAME_START` sent on new game/restart
 - [ ] `GAME_OVER` sent with score and stats
@@ -277,3 +347,4 @@ Before submitting your game:
 - [ ] `banner.webm` included (optional)
 - [ ] Tested in iframe context
 - [ ] Works for both guests and authenticated users
+- [ ] Mobile input handling tested (if `platforms` includes mobile)

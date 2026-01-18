@@ -56,6 +56,27 @@
     <span id="mp-connection-text">Connecting...</span>
   </div>
 
+  <!-- Connection quality indicator -->
+  <div id="connection-quality" class="hidden">
+    <div id="connection-quality-bars">
+      <div class="connection-bar"></div>
+      <div class="connection-bar"></div>
+      <div class="connection-bar"></div>
+      <div class="connection-bar"></div>
+    </div>
+    <span id="connection-quality-text"></span>
+  </div>
+
+  <!-- Network stats display (debug/development) -->
+  <div id="net-stats" class="hidden">
+    <div>RTT: <span id="net-rtt">0</span>ms</div>
+    <div>Jitter: <span id="net-jitter">0</span>ms</div>
+    <div>Rollbacks: <span id="net-rollbacks">0</span></div>
+  </div>
+
+  <!-- Load scripts in order: netcode first, then multiplayer, then main -->
+  <script src="js/netcode.js"></script>
+  <script src="js/multiplayer.js"></script>
   <script src="js/script.js"></script>
 </body>
 </html>

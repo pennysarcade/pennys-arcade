@@ -15,6 +15,8 @@ import {
   createSpectator,
   generateId,
   getGuestAvatarColor,
+  SeededRNG,
+  calculateChecksum,
   MAX_PLAYERS,
   TICK_RATE,
   TICK_INTERVAL,
@@ -39,12 +41,21 @@ import {
   WaveType,
   RING_SWITCH_DURATION
 } from './orbitState.js'
+import { StateHistory, InputHistory } from '../../../shared/netcode/history.js'
+import { GameSnapshot, FrameInput as NetFrameInput } from '../../../shared/netcode/types.js'
 
 // Global game state
 let gameState: GameState = createInitialGameState()
 let tickCounter = 0
 let gameLoopInterval: NodeJS.Timeout | null = null
 let ioInstance: Server | null = null
+
+// Deterministic RNG for game simulation
+let gameRng: SeededRNG = new SeededRNG(gameState.roundSeed)
+
+// State history for rollback support
+const stateHistory = new StateHistory(8) // Keep 8 frames (~133ms at 60Hz)
+const inputHistory = new InputHistory(16) // Keep 16 frames of inputs
 
 // AI Bot State
 const AI_BOT_ID = 'ai-bot'
@@ -204,15 +215,15 @@ function checkPaddleArcsOverlap(angle1: number, angle2: number, arcWidth: number
 // === BALL MANAGEMENT ===
 
 function spawnBall(): void {
-  const angle = Math.random() * Math.PI * 2
+  const angle = gameRng.randomAngle()
   const waveSpeed = getWaveBallSpeed()
 
   const ball: Ball = {
     id: generateId(),
     x: gameState.centerX,
     y: gameState.centerY,
-    vx: Math.cos(angle) * BALL_SPEED * waveSpeed,
-    vy: Math.sin(angle) * BALL_SPEED * waveSpeed,
+    vx: Math.fround(Math.cos(angle) * BALL_SPEED * waveSpeed),
+    vy: Math.fround(Math.sin(angle) * BALL_SPEED * waveSpeed),
     baseRadius: BALL_RADIUS,
     spawnProgress: 0,
     age: 0,
@@ -227,15 +238,15 @@ function spawnBall(): void {
 }
 
 function spawnSpecialBall(): void {
-  const angle = Math.random() * Math.PI * 2
-  const speed = BALL_SPEED * 0.8
+  const angle = gameRng.randomAngle()
+  const speed = Math.fround(BALL_SPEED * 0.8)
 
   gameState.specialBall = {
     id: generateId(),
     x: gameState.centerX,
     y: gameState.centerY,
-    vx: Math.cos(angle) * speed,
-    vy: Math.sin(angle) * speed,
+    vx: Math.fround(Math.cos(angle) * speed),
+    vy: Math.fround(Math.sin(angle) * speed),
     baseRadius: SPECIAL_BALL_RADIUS,
     spawnProgress: 0,
     shrinkProgress: 0,
@@ -258,15 +269,16 @@ function spawnSpecialBall(): void {
 
 function spawnPowerup(): void {
   const types = Object.keys(POWERUP_TYPES)
-  const type = types[Math.floor(Math.random() * types.length)]
-  const angle = Math.random() * Math.PI * 2
+  const type = gameRng.pick(types)
+  const angle = gameRng.randomAngle()
+  const speed = Math.fround(BALL_SPEED * 0.7)
 
   const powerup: Powerup = {
     id: generateId(),
     x: gameState.centerX,
     y: gameState.centerY,
-    vx: Math.cos(angle) * BALL_SPEED * 0.7,
-    vy: Math.sin(angle) * BALL_SPEED * 0.7,
+    vx: Math.fround(Math.cos(angle) * speed),
+    vy: Math.fround(Math.sin(angle) * speed),
     type,
     spawnProgress: 0
   }
@@ -284,7 +296,7 @@ function startWave(): void {
   if (gameState.currentWave % 4 === 0) {
     gameState.waveType = 'BOSS'
   } else {
-    const idx = Math.floor(Math.random() * 3)
+    const idx = gameRng.randomInt(0, 2)
     gameState.waveType = WAVE_TYPES[idx]
   }
 
@@ -398,6 +410,7 @@ function startNewRound(): void {
   gameState.roundNumber++
   gameState.roundStartTime = Date.now()
   gameState.gameTime = 0
+  gameState.frame = 0
   gameState.balls = []
   gameState.powerups = []
   gameState.specialBall = null
@@ -407,6 +420,12 @@ function startNewRound(): void {
   gameState.waveActive = false
   gameState.waveType = 'NORMAL'
   gameState.spawnTimer = 0
+
+  // Reset RNG with new seed for deterministic simulation
+  gameState.roundSeed = Date.now() ^ Math.floor(Math.random() * 0xFFFFFFFF)
+  gameRng = new SeededRNG(gameState.roundSeed)
+  gameState.rngState = gameRng.getState()
+  gameState.checksum = 0
 
   // Check if AI bot should retire (2+ human players means AI not needed)
   const humanCount = getHumanPlayerCount()
@@ -585,7 +604,7 @@ function updateAIBot(dt: number): void {
   if (!aiPlayer) return
 
   // AI has random "lazy" moments where it doesn't react (30% of the time)
-  if (Math.random() < 0.3) {
+  if (gameRng.randomBool(0.3)) {
     aiPlayer.velocity = 0
     aiPlayer.lastInputTime = Date.now()
     aiPlayer.isInactive = false
@@ -629,7 +648,7 @@ function updateAIBot(dt: number): void {
     // Predict where ball will be - but with some error
     const speed = Math.sqrt(nearestBall.vx ** 2 + nearestBall.vy ** 2)
     const timeToEdge = (gameState.arenaRadius - ballDist) / speed
-    const predictionError = (Math.random() - 0.5) * 0.3 // Add some inaccuracy
+    const predictionError = gameRng.randomRangeFloat(-0.15, 0.15) // Add some inaccuracy
     const predictedX = nearestBall.x + nearestBall.vx * timeToEdge * (0.3 + predictionError)
     const predictedY = nearestBall.y + nearestBall.vy * timeToEdge * (0.3 + predictionError)
 
@@ -641,7 +660,7 @@ function updateAIBot(dt: number): void {
 
     // Decide which ring to be on - AI mostly stays on outer ring
     const targetRing = ballDist > gameState.innerRadius ? 0 : 1
-    if (targetRing !== aiBotTargetRing && aiPlayer.ringSwitchProgress <= 0 && Math.random() < 0.3) {
+    if (targetRing !== aiBotTargetRing && aiPlayer.ringSwitchProgress <= 0 && gameRng.randomBool(0.3)) {
       aiBotTargetRing = targetRing
       // Initiate ring switch
       if (aiPlayer.ring !== aiBotTargetRing) {
@@ -681,10 +700,13 @@ function updateAIBot(dt: number): void {
 // === GAME LOOP ===
 
 function gameLoop(): void {
-  const dt = 1 / TICK_RATE
+  const dt = 1 / TICK_RATE // ~16.67ms at 60Hz
   tickCounter++
+  gameState.frame++
+  gameState.gameTime = Math.fround(gameState.gameTime + dt)
 
-  gameState.gameTime += dt
+  // Store RNG state for this frame
+  gameState.rngState = gameRng.getState()
 
   // Check if AI bot is needed (when <2 human players)
   checkAIBotNeeded()
@@ -704,7 +726,7 @@ function gameLoop(): void {
     gameState.spawnTimer = 0
 
     // Spawn powerup or ball
-    if (Math.random() < POWERUP_SPAWN_CHANCE) {
+    if (gameRng.randomBool(POWERUP_SPAWN_CHANCE)) {
       spawnPowerup()
     } else {
       spawnBall()
@@ -1086,6 +1108,7 @@ function broadcastStateUpdate(): void {
 
   // Send positions relative to center (offset from center)
   // Client will add its own centerX/centerY when rendering
+  // Include full ball state for rollback support
   const balls: StateUpdate['balls'] = gameState.balls.map(ball => ({
     id: ball.id,
     x: ball.x - gameState.centerX,  // Relative to center
@@ -1095,7 +1118,10 @@ function broadcastStateUpdate(): void {
     radius: ball.baseRadius * ball.spawnProgress,
     isSpecial: false,
     age: ball.age,
-    spawnProgress: ball.spawnProgress
+    spawnProgress: ball.spawnProgress,
+    spin: ball.spin,
+    speedMult: ball.speedMult,
+    hitCooldown: ball.hitCooldown
   }))
 
   // Add special ball if exists
@@ -1109,28 +1135,54 @@ function broadcastStateUpdate(): void {
       radius: gameState.specialBall.baseRadius * gameState.specialBall.spawnProgress,
       isSpecial: true,
       age: gameState.specialBall.age,
-      spawnProgress: gameState.specialBall.spawnProgress
+      spawnProgress: gameState.specialBall.spawnProgress,
+      spin: gameState.specialBall.spin,
+      speedMult: gameState.specialBall.speedMult,
+      hitCooldown: gameState.specialBall.hitCooldown
     })
   }
 
+  // Include full powerup state for rollback support
   const powerups: StateUpdate['powerups'] = gameState.powerups.map(p => ({
     id: p.id,
     x: p.x - gameState.centerX,  // Relative to center
     y: p.y - gameState.centerY,  // Relative to center
     type: p.type,
-    spawnProgress: p.spawnProgress
+    spawnProgress: p.spawnProgress,
+    vx: p.vx,
+    vy: p.vy
   }))
 
+  // Calculate checksum for state verification
+  // Use a simple hash of critical values
+  let checksum = gameState.frame
+  checksum = Math.imul(checksum, 31) + Math.floor(gameState.gameTime * 1000)
+  for (const [id, player] of gameState.players) {
+    checksum = Math.imul(checksum, 31) + Math.floor(player.angle * 10000)
+    checksum = Math.imul(checksum, 31) + player.score
+  }
+  for (const ball of gameState.balls) {
+    checksum = Math.imul(checksum, 31) + Math.floor(ball.x * 100)
+    checksum = Math.imul(checksum, 31) + Math.floor(ball.y * 100)
+  }
+  gameState.checksum = checksum >>> 0
+
   const update: StateUpdate = {
+    frame: gameState.frame,
+    checksum: gameState.checksum,
     tick: tickCounter,
     gameTime: gameState.gameTime,
     roundNumber: gameState.roundNumber,
+    rngState: gameState.rngState,
     players,
     balls,
     powerups,
     waveActive: gameState.waveActive,
     waveType: gameState.waveType,
-    specialBallReturning: gameState.specialBallReturning
+    specialBallReturning: gameState.specialBallReturning,
+    specialBallTimer: gameState.specialBallTimer,
+    specialBallActiveTime: gameState.specialBallActiveTime,
+    spawnTimer: gameState.spawnTimer
   }
 
   ioInstance?.to('orbit').emit('orbit:state', update)
@@ -1174,6 +1226,7 @@ export async function setupOrbitSocket(io: Server): Promise<void> {
 
 async function handleJoin(socket: Socket, token?: string): Promise<void> {
   const playerId = generateId()
+  // Use crypto for guest username (non-deterministic, not part of simulation)
   let username = `n00b_${Math.floor(Math.random() * 10000)}`
   let avatarColor = getGuestAvatarColor(playerId) // Use consistent color based on ID
   let isGuest = true
