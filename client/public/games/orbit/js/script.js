@@ -1575,7 +1575,6 @@ function checkMilestones() {
 
 // Input state
 let isDragging = false;
-let isMobile = new URLSearchParams(window.location.search).get('mobile') === 'true';
 let keysDown = { clockwise: false, counterClockwise: false };
 
 // === PENNY'S ARCADE INTEGRATION ===
