@@ -11,7 +11,10 @@ const OrbitMultiplayer = (function() {
   let inputSeq = 0;
   let lastServerState = null;
   let interpolationBuffer = [];
-  const INTERPOLATION_DELAY = 50; // ms of interpolation buffer (reduced for tighter visuals)
+  const INTERPOLATION_DELAY = 0; // Disabled - we now extrapolate forward instead of interpolating behind
+
+  // Track balls we've hit locally to avoid double-processing server confirmations
+  const localHitBalls = new Map(); // ballId -> timestamp
 
   // Rollback netcode state
   let predictionState = null;
@@ -323,6 +326,36 @@ const OrbitMultiplayer = (function() {
     socket.emit('orbit:input', input);
   }
 
+  // Send ball hit event to server (client-authoritative collision)
+  function sendBallHit(ballId, paddleAngle, deflectAngle, edgeHit, isSpecial) {
+    if (!socket || !connected || isSpectator) return;
+
+    // Track that we hit this ball locally
+    localHitBalls.set(ballId, Date.now());
+
+    // Clean up old entries
+    const now = Date.now();
+    for (const [id, time] of localHitBalls) {
+      if (now - time > 1000) {
+        localHitBalls.delete(id);
+      }
+    }
+
+    socket.emit('orbit:ball_hit', {
+      ballId: ballId,
+      paddleAngle: paddleAngle,
+      deflectAngle: deflectAngle,
+      edgeHit: edgeHit,
+      isSpecial: isSpecial || false
+    });
+  }
+
+  // Check if we already processed this ball hit locally
+  function wasLocalHit(ballId) {
+    const hitTime = localHitBalls.get(ballId);
+    return hitTime && Date.now() - hitTime < 500;
+  }
+
   // Leave the game
   function leave() {
     cancelReconnect(); // Cancel any pending reconnection
@@ -338,88 +371,52 @@ const OrbitMultiplayer = (function() {
     }
   }
 
-  // Get interpolated state for smooth rendering
+  // Get extrapolated state for rendering
+  // Instead of showing where things were, predict where they are NOW
   function getInterpolatedState() {
-    if (interpolationBuffer.length < 2) {
-      return lastServerState;
+    if (!lastServerState) {
+      return null;
     }
 
-    const renderTime = Date.now() - INTERPOLATION_DELAY;
+    // Use the latest server state and extrapolate forward
+    const state = lastServerState;
+    const lastStateTime = interpolationBuffer.length > 0
+      ? interpolationBuffer[interpolationBuffer.length - 1].timestamp
+      : Date.now();
 
-    // Find the two states to interpolate between
-    let from = null;
-    let to = null;
+    // How far ahead to extrapolate (time since last server update)
+    const extrapolateTime = Math.min((Date.now() - lastStateTime) / 1000, 0.1); // Cap at 100ms
 
-    for (let i = 0; i < interpolationBuffer.length - 1; i++) {
-      if (interpolationBuffer[i].timestamp <= renderTime &&
-          interpolationBuffer[i + 1].timestamp >= renderTime) {
-        from = interpolationBuffer[i];
-        to = interpolationBuffer[i + 1];
-        break;
+    // Extrapolate ball positions forward using their velocity
+    const extrapolatedBalls = state.balls.map(ball => {
+      // Don't extrapolate if ball has high hit cooldown (just bounced, velocity may change)
+      if (ball.hitCooldown > 0.05) {
+        return ball;
       }
-    }
-
-    if (!from || !to) {
-      return lastServerState;
-    }
-
-    // Calculate interpolation factor
-    const range = to.timestamp - from.timestamp;
-    const t = range > 0 ? (renderTime - from.timestamp) / range : 0;
-
-    // Interpolate player positions
-    const interpolatedPlayers = {};
-    for (const id in to.state.players) {
-      const fromPlayer = from.state.players[id];
-      const toPlayer = to.state.players[id];
-
-      if (fromPlayer && toPlayer) {
-        // Don't interpolate our own player - use latest state for responsiveness
-        if (id === playerId) {
-          interpolatedPlayers[id] = toPlayer;
-        } else {
-          interpolatedPlayers[id] = {
-            ...toPlayer,
-            angle: lerpAngle(fromPlayer.angle, toPlayer.angle, t),
-            ringSwitchProgress: lerp(fromPlayer.ringSwitchProgress, toPlayer.ringSwitchProgress, t)
-          };
-        }
-      } else {
-        interpolatedPlayers[id] = toPlayer;
-      }
-    }
-
-    // Interpolate ball positions
-    const interpolatedBalls = to.state.balls.map(toBall => {
-      const fromBall = from.state.balls.find(b => b.id === toBall.id);
-      if (fromBall) {
-        return {
-          ...toBall,
-          x: lerp(fromBall.x, toBall.x, t),
-          y: lerp(fromBall.y, toBall.y, t)
-        };
-      }
-      return toBall;
+      return {
+        ...ball,
+        x: ball.x + ball.vx * ball.speedMult * extrapolateTime,
+        y: ball.y + ball.vy * ball.speedMult * extrapolateTime
+      };
     });
 
-    // Interpolate powerup positions
-    const interpolatedPowerups = to.state.powerups.map(toPowerup => {
-      const fromPowerup = from.state.powerups.find(p => p.id === toPowerup.id);
-      if (fromPowerup) {
-        return {
-          ...toPowerup,
-          x: lerp(fromPowerup.x, toPowerup.x, t),
-          y: lerp(fromPowerup.y, toPowerup.y, t)
-        };
-      }
-      return toPowerup;
+    // Extrapolate powerup positions
+    const extrapolatedPowerups = state.powerups.map(powerup => {
+      return {
+        ...powerup,
+        x: powerup.x + powerup.vx * extrapolateTime,
+        y: powerup.y + powerup.vy * extrapolateTime
+      };
     });
+
+    // For other players, use latest position (they report their own position)
+    const players = { ...state.players };
 
     return {
-      ...to.state,
-      players: interpolatedPlayers,
-      balls: interpolatedBalls,
-      powerups: interpolatedPowerups
+      ...state,
+      players: players,
+      balls: extrapolatedBalls,
+      powerups: extrapolatedPowerups
     };
   }
 
@@ -520,6 +517,8 @@ const OrbitMultiplayer = (function() {
   return {
     connect,
     sendInput,
+    sendBallHit,
+    wasLocalHit,
     leave,
     requestJoin,
     getInterpolatedState,

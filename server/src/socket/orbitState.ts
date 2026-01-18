@@ -49,7 +49,7 @@ export const PADDLE_DECELERATION = 12
 export const RING_SWITCH_DURATION = 0.25
 
 export const BALL_RADIUS = 8
-export const BALL_SPEED = 150
+export const BALL_SPEED = 120 // Reduced from 150 for more forgiving multiplayer timing
 export const SPAWN_INTERVAL = 2000 // ms between ball spawns
 
 export const SPECIAL_BALL_RADIUS = 12
@@ -176,6 +176,15 @@ export interface PlayerInput {
   velocity?: number
   ringSwitch?: boolean
   seq: number
+}
+
+// Client-reported ball hit (for client-authoritative collision)
+export interface ClientBallHit {
+  ballId: string
+  paddleAngle: number
+  deflectAngle: number
+  edgeHit: boolean
+  isSpecial: boolean
 }
 
 // Game state

@@ -8,6 +8,7 @@ import {
   Ball,
   Powerup,
   PlayerInput,
+  ClientBallHit,
   StateUpdate,
   RoundEndData,
   createInitialGameState,
@@ -64,6 +65,11 @@ const AI_BOT_COLOR = '#888888' // Gray color to distinguish from players
 let aiBotActive = false
 let aiBotTargetAngle = 0
 let aiBotTargetRing = 0
+
+// Client-authoritative collision tracking
+// Track balls that clients have reported hitting to avoid server double-counting
+const clientHitBalls = new Map<string, number>() // ballId -> timestamp of hit
+const CLIENT_HIT_TIMEOUT = 500 // Clear client hit tracking after 500ms
 
 // === UTILITY FUNCTIONS ===
 
@@ -203,6 +209,25 @@ function checkAnyPaddleCollision(
     if (result.hit) {
       return { ...result, player }
     }
+  }
+  return { hit: false, player: null, edgeHit: false, deflectAngle: 0 }
+}
+
+// Check collision only with AI paddle (for server-side fallback)
+function checkAIPaddleCollision(
+  ballX: number,
+  ballY: number,
+  ballRadius: number
+): { hit: boolean; player: Player | null; edgeHit: boolean; deflectAngle: number } {
+  // Only check the AI bot's paddle - human players report their own collisions
+  const aiPlayer = gameState.players.get(AI_BOT_ID)
+  if (!aiPlayer || aiPlayer.isSpectator || aiPlayer.phaseInProgress < 1) {
+    return { hit: false, player: null, edgeHit: false, deflectAngle: 0 }
+  }
+
+  const result = checkPaddleCollision(aiPlayer, ballX, ballY, ballRadius)
+  if (result.hit) {
+    return { ...result, player: aiPlayer }
   }
   return { hit: false, player: null, edgeHit: false, deflectAngle: 0 }
 }
@@ -705,6 +730,14 @@ function gameLoop(): void {
   gameState.frame++
   gameState.gameTime = Math.fround(gameState.gameTime + dt)
 
+  // Clean up old client hit tracking entries
+  const now = Date.now()
+  for (const [ballId, hitTime] of clientHitBalls) {
+    if (now - hitTime > CLIENT_HIT_TIMEOUT) {
+      clientHitBalls.delete(ballId)
+    }
+  }
+
   // Store RNG state for this frame
   gameState.rngState = gameRng.getState()
 
@@ -858,10 +891,15 @@ function updateBalls(dt: number): void {
       ball.speedMult = Math.max(1, ball.speedMult - 0.3 * dt)
     }
 
-    // Check collision with paddles
-    if (ball.hitCooldown <= 0) {
+    // Check collision with paddles (server-side fallback)
+    // Skip if client already reported this hit or if ball has cooldown
+    const clientHitTime = clientHitBalls.get(ball.id)
+    const wasClientHit = clientHitTime && Date.now() - clientHitTime < CLIENT_HIT_TIMEOUT
+
+    if (ball.hitCooldown <= 0 && !wasClientHit) {
       const currentRadius = ball.baseRadius * ball.spawnProgress
-      const collision = checkAnyPaddleCollision(ball.x, ball.y, currentRadius)
+      // Only check AI paddle collisions on server - human players report their own hits
+      const collision = checkAIPaddleCollision(ball.x, ball.y, currentRadius)
 
       if (collision.hit && collision.player) {
         const player = collision.player
@@ -892,7 +930,9 @@ function updateBalls(dt: number): void {
           points,
           combo: player.combo,
           x: ball.x - gameState.centerX,
-          y: ball.y - gameState.centerY
+          y: ball.y - gameState.centerY,
+          newVx: ball.vx,
+          newVy: ball.vy
         })
       }
     }
@@ -1015,10 +1055,15 @@ function updateSpecialBall(dt: number): void {
     }
   }
 
-  // Check collision with paddles
-  if (ball.hitCooldown <= 0) {
+  // Check collision with paddles (server-side fallback for AI only)
+  // Skip if client already reported this hit
+  const clientHitTime = clientHitBalls.get(ball.id)
+  const wasClientHit = clientHitTime && Date.now() - clientHitTime < CLIENT_HIT_TIMEOUT
+
+  if (ball.hitCooldown <= 0 && !wasClientHit) {
     const currentRadius = ball.baseRadius * ball.spawnProgress
-    const collision = checkAnyPaddleCollision(ball.x, ball.y, currentRadius)
+    // Only check AI paddle - human players report their own hits
+    const collision = checkAIPaddleCollision(ball.x, ball.y, currentRadius)
 
     if (collision.hit && collision.player) {
       const player = collision.player
@@ -1050,8 +1095,11 @@ function updateSpecialBall(dt: number): void {
       // Broadcast hit
       ioInstance?.to('orbit').emit('orbit:special_ball_hit', {
         playerId: player.id,
+        ballId: ball.id,
         points,
-        combo: player.combo
+        combo: player.combo,
+        newVx: ball.vx,
+        newVy: ball.vy
       })
     }
   }
@@ -1208,6 +1256,10 @@ export async function setupOrbitSocket(io: Server): Promise<void> {
 
     socket.on('orbit:input', (data: PlayerInput) => {
       handleInput(socket, data)
+    })
+
+    socket.on('orbit:ball_hit', (data: ClientBallHit) => {
+      handleClientBallHit(socket, data)
     })
 
     socket.on('orbit:leave', () => {
@@ -1469,6 +1521,90 @@ function handleRequestJoin(socket: Socket): void {
     // No room, stay in queue
     console.log(`[ORBIT] Join request denied - game full: ${spectator.username}`)
   }
+}
+
+// Handle client-reported ball hit (client-authoritative collision)
+function handleClientBallHit(socket: Socket, data: ClientBallHit): void {
+  // Find player by socket id
+  let player: Player | undefined
+  for (const p of gameState.players.values()) {
+    if (p.socketId === socket.id) {
+      player = p
+      break
+    }
+  }
+
+  if (!player || player.isSpectator) return
+
+  // Find the ball
+  let ball: Ball | null = null
+  let ballIndex = -1
+
+  if (data.isSpecial && gameState.specialBall?.id === data.ballId) {
+    ball = gameState.specialBall
+  } else {
+    ballIndex = gameState.balls.findIndex(b => b.id === data.ballId)
+    if (ballIndex >= 0) {
+      ball = gameState.balls[ballIndex]
+    }
+  }
+
+  if (!ball) return // Ball not found (may have escaped or already been handled)
+
+  // Check if this ball was already hit recently (avoid double-counting)
+  const lastHitTime = clientHitBalls.get(data.ballId)
+  if (lastHitTime && Date.now() - lastHitTime < CLIENT_HIT_TIMEOUT) {
+    return // Already processed this hit
+  }
+
+  // Mark ball as hit by client
+  clientHitBalls.set(data.ballId, Date.now())
+
+  // Trust the client's deflect angle and apply it
+  const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy)
+  ball.vx = Math.fround(Math.cos(data.deflectAngle) * speed)
+  ball.vy = Math.fround(Math.sin(data.deflectAngle) * speed)
+
+  // Add momentum from paddle velocity
+  const momentumBoost = 1 + Math.abs(player.velocity) / PADDLE_SPEED * 0.8
+  ball.speedMult = Math.min(1.8, ball.speedMult * momentumBoost)
+
+  // Calculate score
+  const points = data.isSpecial
+    ? 50 + Math.floor(gameState.specialBallActiveTime * 5) + (data.edgeHit ? 30 : 0)
+    : calculateHitScore(player, ball, data.edgeHit)
+
+  // Update player state
+  player.score += points
+  player.combo++
+  player.lastHitTime = gameState.gameTime
+  player.ballsHit++
+  player.lastInputTime = Date.now()
+  player.isInactive = false
+
+  // Set ball hit cooldown
+  ball.hitCooldown = 0.15 // Slightly longer cooldown to prevent rapid hits
+
+  // Handle special ball returning
+  if (data.isSpecial && gameState.specialBallReadyToReturn && !gameState.specialBallReturning) {
+    gameState.specialBallReturning = true
+    ioInstance?.to('orbit').emit('orbit:special_ball_returning')
+  }
+
+  // Broadcast hit event to all clients
+  const hitEvent = data.isSpecial ? 'orbit:special_ball_hit' : 'orbit:ball_hit'
+  ioInstance?.to('orbit').emit(hitEvent, {
+    playerId: player.id,
+    ballId: ball.id,
+    points,
+    combo: player.combo,
+    x: ball.x - gameState.centerX,
+    y: ball.y - gameState.centerY,
+    // Include new velocity so clients can sync
+    newVx: ball.vx,
+    newVy: ball.vy,
+    isSpecial: data.isSpecial
+  })
 }
 
 function handleLeave(socket: Socket): void {
