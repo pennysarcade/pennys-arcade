@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useSocket } from '../context/SocketContext'
 import { GAMES } from '../components/Games/ArcadeGrid'
+import CRTAdminPanel from '../components/CRT/CRTAdminPanel'
 import '../styles/admin.css'
 
 interface User {
@@ -148,7 +149,7 @@ function Pagination({ page, total, onPageChange }: { page: number; total: number
   )
 }
 
-type Tab = 'overview' | 'users' | 'content' | 'games' | 'settings'
+type Tab = 'overview' | 'users' | 'content' | 'games' | 'display' | 'settings'
 
 export default function Admin() {
   const { user, token } = useAuth()
@@ -716,7 +717,7 @@ export default function Admin() {
       </div>
 
       <div className="admin-nav">
-        {(['overview', 'users', 'content', 'games', 'settings'] as Tab[]).map(tab => (
+        {(['overview', 'users', 'content', 'games', 'display', 'settings'] as Tab[]).map(tab => (
           <button
             key={tab}
             className={`admin-nav-btn ${activeTab === tab ? 'active' : ''}`}
@@ -1172,6 +1173,15 @@ export default function Admin() {
             <Pagination page={scoresPage} total={scoresTotal} onPageChange={p => fetchScores(selectedGame, p)} />
           </div>
         </>
+      )}
+
+      {/* Display Tab - CRT Effects */}
+      {activeTab === 'display' && (
+        <div className="admin-card">
+          <h2>Display Settings</h2>
+          <p style={{ color: '#888', marginBottom: 20 }}>Configure CRT visual effects for the entire site.</p>
+          <CRTAdminPanel />
+        </div>
       )}
 
       {/* Settings Tab */}

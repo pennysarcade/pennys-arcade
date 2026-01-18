@@ -5,6 +5,7 @@ import { useSocket } from './context/SocketContext'
 import { useDeviceType } from './hooks/useDeviceType'
 import DesktopApp from './layouts/DesktopApp'
 import MobileApp from './layouts/MobileApp'
+import CRTOverlay from './components/CRT/CRTOverlay'
 
 // Component to track page navigation and notify server
 function PageTracker() {
@@ -49,6 +50,7 @@ function App() {
       <Routes>
         <Route path="*" element={isMobile ? <MobileApp /> : <DesktopApp />} />
       </Routes>
+      <CRTOverlay />
     </>
   )
 }
