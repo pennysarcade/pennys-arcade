@@ -222,6 +222,7 @@ export interface StateUpdate {
     avatarColor: string
     paddleArc: number
     phaseInProgress: number
+    isAI: boolean
   }>
   balls: Array<{
     id: string

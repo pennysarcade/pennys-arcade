@@ -42,7 +42,7 @@ body {
   margin-top: 5px;
 }
 
-#welcome-screen,
+/* Game over screen */
 #game-over-screen {
   position: fixed;
   top: 50%;
@@ -53,7 +53,6 @@ body {
   z-index: 100;
 }
 
-#welcome-screen h1,
 #game-over-screen h1 {
   font-family: 'Press Start 2P', monospace;
   font-size: 48px;
@@ -61,15 +60,108 @@ body {
   margin-bottom: 30px;
 }
 
-#welcome-screen p,
 #game-over-screen p {
   font-size: 24px;
   margin-bottom: 15px;
 }
 
-#welcome-screen .controls {
-  color: #666;
-  font-size: 18px;
+/* Info button */
+#info-btn {
+  position: fixed;
+  top: 15px;
+  left: 15px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #888;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 14px;
+  padding: 0;
+  cursor: pointer;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#info-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+/* Info panel */
+#info-panel {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.95);
+  border: 2px solid #444;
+  border-radius: 12px;
+  padding: 30px 40px;
+  text-align: center;
+  color: #fff;
+  z-index: 150;
+  max-width: 90vw;
+}
+
+#info-panel h2 {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 32px;
+  color: #fff;
+  margin-bottom: 20px;
+}
+
+#info-panel p {
+  font-size: 20px;
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+
+#info-panel .controls {
+  color: #888;
+  font-size: 16px;
+}
+
+#info-panel .info-tip {
+  color: #ff4444;
+  font-size: 14px;
+  margin-top: 15px;
+}
+
+#info-close-btn {
+  margin-top: 20px;
+  font-size: 12px;
+  padding: 10px 20px;
+}
+
+/* Join button */
+#join-btn {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #00ff88;
+  color: #000;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 14px;
+  padding: 15px 30px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  z-index: 80;
+  animation: pulse-join 2s ease-in-out infinite;
+}
+
+#join-btn:hover {
+  background: #00cc66;
+}
+
+@keyframes pulse-join {
+  0%, 100% { box-shadow: 0 0 10px rgba(0, 255, 136, 0.5); }
+  50% { box-shadow: 0 0 25px rgba(0, 255, 136, 0.8); }
 }
 
 button {
@@ -291,5 +383,33 @@ button:hover {
 
   #high-score {
     font-size: 14px;
+  }
+
+  #info-btn {
+    width: 32px;
+    height: 32px;
+    font-size: 12px;
+  }
+
+  #info-panel {
+    padding: 20px 25px;
+  }
+
+  #info-panel h2 {
+    font-size: 24px;
+  }
+
+  #info-panel p {
+    font-size: 16px;
+  }
+
+  #info-panel .controls {
+    font-size: 14px;
+  }
+
+  #join-btn {
+    font-size: 12px;
+    padding: 12px 24px;
+    bottom: 100px;
   }
 }

@@ -13,13 +13,21 @@
     <div id="score">0</div>
     <div id="high-score"></div>
   </div>
-  <div id="welcome-screen">
-    <h1>ORBIT</h1>
+  <!-- Info button (top-left) -->
+  <button id="info-btn">?</button>
+
+  <!-- Info panel (hidden by default) -->
+  <div id="info-panel" class="hidden">
+    <h2>ORBIT</h2>
     <p>Keep the balls inside the ring!</p>
-    <p class="controls desktop-controls">WASD or drag to move | Space to switch rings</p>
-    <p class="controls mobile-controls">Drag to move | Double-tap to switch rings</p>
-    <button id="start-btn">START</button>
+    <p class="controls desktop-controls">WASD or drag to move<br>Space to switch rings</p>
+    <p class="controls mobile-controls">Drag to move<br>Tap button to switch rings</p>
+    <p class="info-tip">Red ball escaping ends the round</p>
+    <button id="info-close-btn">GOT IT</button>
   </div>
+
+  <!-- Join button for spectators -->
+  <button id="join-btn" class="hidden">JOIN GAME</button>
 
   <!-- Mobile ring switch button -->
   <button id="ring-switch-btn" class="hidden">SWITCH</button>

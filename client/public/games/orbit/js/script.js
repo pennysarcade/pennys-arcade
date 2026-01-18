@@ -19,12 +19,14 @@ let mpConnected = false;
 // DOM elements
 const scoreDisplay = document.getElementById('score');
 const highScoreDisplay = document.getElementById('high-score');
-const welcomeScreen = document.getElementById('welcome-screen');
 const gameOverScreen = document.getElementById('game-over-screen');
 const finalScoreDisplay = document.getElementById('final-score');
-const startBtn = document.getElementById('start-btn');
 const restartBtn = document.getElementById('restart-btn');
 const ringSwitchBtn = document.getElementById('ring-switch-btn');
+const infoBtn = document.getElementById('info-btn');
+const infoPanel = document.getElementById('info-panel');
+const infoCloseBtn = document.getElementById('info-close-btn');
+const joinBtn = document.getElementById('join-btn');
 
 // Game constants
 const GAME_ID = 'orbit';
@@ -3022,20 +3024,46 @@ function endGame() {
 
 // === EVENT LISTENERS ===
 
-startBtn.addEventListener('click', startGame);
 restartBtn.addEventListener('click', startGame);
+
+// Info button handlers
+if (infoBtn && infoPanel && infoCloseBtn) {
+  infoBtn.addEventListener('click', () => {
+    infoPanel.classList.remove('hidden');
+  });
+  infoCloseBtn.addEventListener('click', () => {
+    infoPanel.classList.add('hidden');
+  });
+  // Close on click outside
+  infoPanel.addEventListener('click', (e) => {
+    if (e.target === infoPanel) {
+      infoPanel.classList.add('hidden');
+    }
+  });
+}
+
+// Join button handler
+if (joinBtn) {
+  joinBtn.addEventListener('click', () => {
+    // Request to join the game (server will handle promotion)
+    if (typeof OrbitMultiplayer !== 'undefined' && OrbitMultiplayer.isConnected()) {
+      OrbitMultiplayer.requestJoin();
+      joinBtn.classList.add('hidden');
+    }
+  });
+}
 
 // Mobile ring switch button
 if (ringSwitchBtn) {
   ringSwitchBtn.addEventListener('click', () => {
-    if (gameRunning) {
+    if (gameRunning && !mpIsSpectator) {
       switchRing();
     }
   });
 
   // Show/hide based on game state and mobile detection
   function updateRingSwitchButton() {
-    if (isMobile && gameRunning) {
+    if (isMobile && gameRunning && !mpIsSpectator) {
       ringSwitchBtn.classList.remove('hidden');
     } else {
       ringSwitchBtn.classList.add('hidden');
@@ -3064,8 +3092,8 @@ initMultiplayer();
 async function initMultiplayer() {
   console.log('[ORBIT] Connecting to multiplayer server...');
 
-  // Hide welcome screen immediately - no start button needed
-  welcomeScreen.classList.add('hidden');
+  // Start the game loop immediately - players will observe the action
+  gameRunning = true;
 
   // Load multiplayer.js if not already loaded
   if (typeof OrbitMultiplayer === 'undefined') {
@@ -3102,21 +3130,33 @@ function handleMPJoined(data) {
   mpConnected = true;
 
   if (data.isSpectator) {
-    sendTickerMessage(`Spectating - queue position: ${data.queuePosition}`);
+    sendTickerMessage(`Watching the action - click JOIN to play!`);
+    // Show join button for spectators
+    if (joinBtn) joinBtn.classList.remove('hidden');
   } else {
     // Set initial paddle angle
     paddleAngle = data.angle || -Math.PI / 2;
     targetAngle = paddleAngle;
+    // Hide join button for active players
+    if (joinBtn) joinBtn.classList.add('hidden');
   }
 
-  // Hide welcome screen and start game
-  welcomeScreen.classList.add('hidden');
+  // Start game and hide any overlays
   gameOverScreen.classList.add('hidden');
   gameRunning = true;
 
   // Initialize audio
   AudioSystem.init();
   AudioSystem.startMusic();
+
+  // Update mobile button visibility
+  if (isMobile && ringSwitchBtn) {
+    if (!mpIsSpectator) {
+      ringSwitchBtn.classList.remove('hidden');
+    } else {
+      ringSwitchBtn.classList.add('hidden');
+    }
+  }
 }
 
 function handleMPStateUpdate(state) {
@@ -3291,6 +3331,12 @@ function handleMPPromoted(data) {
   paddleAngle = data.angle;
   targetAngle = data.angle;
   sendTickerMessage('You are now playing!');
+
+  // Hide join button, show mobile controls
+  if (joinBtn) joinBtn.classList.add('hidden');
+  if (isMobile && ringSwitchBtn) {
+    ringSwitchBtn.classList.remove('hidden');
+  }
 }
 
 function handleMPInactiveWarning() {

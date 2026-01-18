@@ -46,6 +46,14 @@ let tickCounter = 0
 let gameLoopInterval: NodeJS.Timeout | null = null
 let ioInstance: Server | null = null
 
+// AI Bot State
+const AI_BOT_ID = 'ai-bot'
+const AI_BOT_USERNAME = '[BOT] Keeper'
+const AI_BOT_COLOR = '#888888' // Gray color to distinguish from players
+let aiBotActive = false
+let aiBotTargetAngle = 0
+let aiBotTargetRing = 0
+
 // === UTILITY FUNCTIONS ===
 
 function normalizeAngle(angle: number): number {
@@ -400,6 +408,12 @@ function startNewRound(): void {
   gameState.waveType = 'NORMAL'
   gameState.spawnTimer = 0
 
+  // Check if AI bot should retire (2+ human players means AI not needed)
+  const humanCount = getHumanPlayerCount()
+  if (humanCount >= 2 && aiBotActive) {
+    removeAIBot()
+  }
+
   // Reset player scores but keep positions
   for (const player of gameState.players.values()) {
     player.score = 0
@@ -507,6 +521,150 @@ function promoteSpectator(removePlayerId?: string): void {
   }
 }
 
+// Count human players (excluding AI bot)
+function getHumanPlayerCount(): number {
+  let count = 0
+  for (const player of gameState.players.values()) {
+    if (player.id !== AI_BOT_ID) {
+      count++
+    }
+  }
+  return count
+}
+
+// Add AI bot to the game
+function addAIBot(): void {
+  if (aiBotActive || gameState.players.has(AI_BOT_ID)) return
+
+  console.log('[ORBIT] Adding AI bot to game')
+  const spawnAngle = calculateSpawnAngle()
+  const aiPlayer = createPlayer(
+    AI_BOT_ID,
+    'ai-socket', // Fake socket ID
+    AI_BOT_USERNAME,
+    AI_BOT_COLOR,
+    true, // isGuest
+    null, // no userId
+    spawnAngle
+  )
+
+  // AI is immediately active (no phase-in)
+  aiPlayer.phaseInProgress = 1
+  aiPlayer.invulnerableUntil = 0
+
+  gameState.players.set(AI_BOT_ID, aiPlayer)
+  aiBotActive = true
+  aiBotTargetAngle = spawnAngle
+  aiBotTargetRing = 0
+}
+
+// Remove AI bot from the game
+function removeAIBot(): void {
+  if (!aiBotActive) return
+
+  console.log('[ORBIT] Removing AI bot from game')
+  gameState.players.delete(AI_BOT_ID)
+  aiBotActive = false
+}
+
+// Check if AI bot should be active (when <2 human players)
+function checkAIBotNeeded(): void {
+  const humanCount = getHumanPlayerCount()
+
+  if (humanCount < 2 && !aiBotActive) {
+    addAIBot()
+  }
+  // Note: AI bot is removed at round end, not mid-round
+}
+
+// Update AI bot behavior
+function updateAIBot(dt: number): void {
+  if (!aiBotActive) return
+
+  const aiPlayer = gameState.players.get(AI_BOT_ID)
+  if (!aiPlayer) return
+
+  // Find the nearest threatening ball
+  let nearestBall: Ball | null = null
+  let nearestDist = Infinity
+
+  const allBalls = [...gameState.balls]
+  if (gameState.specialBall) allBalls.push(gameState.specialBall)
+
+  for (const ball of allBalls) {
+    const dx = ball.x - gameState.centerX
+    const dy = ball.y - gameState.centerY
+    const dist = Math.sqrt(dx * dx + dy * dy)
+
+    // Calculate if ball is heading outward
+    const ballAngle = Math.atan2(dy, dx)
+    const velAngle = Math.atan2(ball.vy, ball.vx)
+    const headingOutward = Math.cos(velAngle - ballAngle) > 0
+
+    if (headingOutward && dist < nearestDist) {
+      nearestDist = dist
+      nearestBall = ball
+    }
+  }
+
+  if (nearestBall) {
+    // Target the ball's predicted position
+    const dx = nearestBall.x - gameState.centerX
+    const dy = nearestBall.y - gameState.centerY
+    const ballAngle = Math.atan2(dy, dx)
+    const ballDist = Math.sqrt(dx * dx + dy * dy)
+
+    // Predict where ball will be
+    const speed = Math.sqrt(nearestBall.vx ** 2 + nearestBall.vy ** 2)
+    const timeToEdge = (gameState.arenaRadius - ballDist) / speed
+    const predictedX = nearestBall.x + nearestBall.vx * timeToEdge * 0.5
+    const predictedY = nearestBall.y + nearestBall.vy * timeToEdge * 0.5
+
+    const predictedDx = predictedX - gameState.centerX
+    const predictedDy = predictedY - gameState.centerY
+    const predictedAngle = Math.atan2(predictedDy, predictedDx)
+
+    aiBotTargetAngle = predictedAngle
+
+    // Decide which ring to be on based on ball distance
+    const targetRing = ballDist > gameState.innerRadius ? 0 : 1
+    if (targetRing !== aiBotTargetRing && aiPlayer.ringSwitchProgress <= 0) {
+      aiBotTargetRing = targetRing
+      // Initiate ring switch
+      if (aiPlayer.ring !== aiBotTargetRing) {
+        aiPlayer.ringSwitchProgress = 0.001
+        aiPlayer.ringSwitchFrom = aiPlayer.ring
+        aiPlayer.ringSwitchTo = aiBotTargetRing
+      }
+    }
+  }
+
+  // Move towards target angle
+  const angleDiff = angleDifference(aiBotTargetAngle, aiPlayer.angle)
+  const maxMove = PADDLE_SPEED * dt * 0.8 // AI is slightly slower than max speed
+
+  if (Math.abs(angleDiff) > 0.01) {
+    const move = Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), maxMove)
+    aiPlayer.angle = normalizeAngle(aiPlayer.angle + move)
+    aiPlayer.velocity = move / dt
+  } else {
+    aiPlayer.velocity = 0
+  }
+
+  // Update ring switch progress
+  if (aiPlayer.ringSwitchProgress > 0 && aiPlayer.ringSwitchProgress < 1) {
+    aiPlayer.ringSwitchProgress += dt / RING_SWITCH_DURATION
+    if (aiPlayer.ringSwitchProgress >= 1) {
+      aiPlayer.ringSwitchProgress = 0
+      aiPlayer.ring = aiPlayer.ringSwitchTo
+    }
+  }
+
+  // AI is always active
+  aiPlayer.lastInputTime = Date.now()
+  aiPlayer.isInactive = false
+}
+
 // === GAME LOOP ===
 
 function gameLoop(): void {
@@ -515,8 +673,14 @@ function gameLoop(): void {
 
   gameState.gameTime += dt
 
+  // Check if AI bot is needed (when <2 human players)
+  checkAIBotNeeded()
+
   // Update players
   updatePlayers(dt)
+
+  // Update AI bot behavior
+  updateAIBot(dt)
 
   // Update ball spawning
   gameState.spawnTimer += dt * 1000
@@ -902,7 +1066,8 @@ function broadcastStateUpdate(): void {
       username: player.username,
       avatarColor: player.avatarColor,
       paddleArc: player.paddleArc,
-      phaseInProgress: player.phaseInProgress
+      phaseInProgress: player.phaseInProgress,
+      isAI: id === AI_BOT_ID
     }
   }
 
@@ -982,6 +1147,10 @@ export async function setupOrbitSocket(io: Server): Promise<void> {
 
     socket.on('orbit:leave', () => {
       handleLeave(socket)
+    })
+
+    socket.on('orbit:request_join', () => {
+      handleRequestJoin(socket)
     })
 
     socket.on('disconnect', () => {
@@ -1161,6 +1330,78 @@ function handleInput(socket: Socket, data: PlayerInput): void {
     } else {
       socket.emit('orbit:ring_switch_blocked')
     }
+  }
+}
+
+function handleRequestJoin(socket: Socket): void {
+  // Find the spectator requesting to join
+  let spectator = null
+  for (const s of gameState.spectators.values()) {
+    if (s.socketId === socket.id) {
+      spectator = s
+      break
+    }
+  }
+
+  if (!spectator) {
+    // Not a spectator, might already be a player
+    return
+  }
+
+  // Check if there's room (either naturally or by removing AI)
+  const humanCount = getHumanPlayerCount()
+
+  if (gameState.players.size < MAX_PLAYERS) {
+    // Room available, promote directly
+    gameState.spectators.delete(spectator.id)
+
+    const spawnAngle = calculateSpawnAngle()
+    const player = createPlayer(
+      spectator.id,
+      spectator.socketId,
+      spectator.username,
+      spectator.avatarColor,
+      spectator.isGuest,
+      spectator.userId,
+      spawnAngle
+    )
+
+    gameState.players.set(player.id, player)
+
+    socket.emit('orbit:promoted', {
+      playerId: player.id,
+      angle: player.angle
+    })
+
+    console.log(`[ORBIT] Spectator promoted via request: ${spectator.username}`)
+  } else if (aiBotActive && humanCount < MAX_PLAYERS) {
+    // AI is taking a slot, remove it and add the human
+    removeAIBot()
+
+    gameState.spectators.delete(spectator.id)
+
+    const spawnAngle = calculateSpawnAngle()
+    const player = createPlayer(
+      spectator.id,
+      spectator.socketId,
+      spectator.username,
+      spectator.avatarColor,
+      spectator.isGuest,
+      spectator.userId,
+      spawnAngle
+    )
+
+    gameState.players.set(player.id, player)
+
+    socket.emit('orbit:promoted', {
+      playerId: player.id,
+      angle: player.angle
+    })
+
+    console.log(`[ORBIT] Spectator promoted (AI removed): ${spectator.username}`)
+  } else {
+    // No room, stay in queue
+    console.log(`[ORBIT] Join request denied - game full: ${spectator.username}`)
   }
 }
 

@@ -313,11 +313,19 @@ const OrbitMultiplayer = (function() {
     return a + diff * t;
   }
 
+  // Request to join the game (for spectators)
+  function requestJoin() {
+    if (!socket || !connected) return;
+    console.log('[ORBIT MP] Requesting to join game');
+    socket.emit('orbit:request_join');
+  }
+
   // Public API
   return {
     connect,
     sendInput,
     leave,
+    requestJoin,
     getInterpolatedState,
     getLastState: () => lastServerState,
     getPlayerId: () => playerId,
