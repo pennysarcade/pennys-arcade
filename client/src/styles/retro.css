@@ -159,6 +159,7 @@ h3 {
   overflow: hidden;
   container-type: inline-size;
   min-width: 350px;
+  position: relative;
 }
 
 .page-content {

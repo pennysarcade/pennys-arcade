@@ -21,6 +21,7 @@
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   padding-bottom: env(safe-area-inset-bottom, 0);
+  position: relative;
 }
 
 /* ========================================

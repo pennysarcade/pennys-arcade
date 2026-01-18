@@ -10,6 +10,7 @@ import MobileAdmin from '../mobile/pages/MobileAdmin'
 import About from '../pages/About'
 import Leaderboard from '../pages/Leaderboard'
 import Privacy from '../pages/Privacy'
+import CRTOverlay from '../components/CRT/CRTOverlay'
 import '../mobile/mobile.css'
 
 export default function MobileApp() {
@@ -32,6 +33,7 @@ export default function MobileApp() {
           <Route path="/roadmap" element={<Navigate to="/about" replace />} />
           <Route path="/privacy" element={<Privacy />} />
         </Routes>
+        <CRTOverlay />
       </main>
 
       <BurgerMenu isOpen={menuOpen} onClose={() => setMenuOpen(false)} />

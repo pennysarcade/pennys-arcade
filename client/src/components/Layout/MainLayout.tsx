@@ -11,6 +11,7 @@ import ResizeHandle from '../UI/ResizeHandle'
 import TabBar from '../UI/TabBar'
 import FitText from '../UI/FitText'
 import ScrollContainer from '../UI/ScrollContainer'
+import CRTOverlay from '../CRT/CRTOverlay'
 import { GAMES } from '../Games/ArcadeGrid'
 
 interface MainLayoutProps {
@@ -199,6 +200,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
           <ScrollContainer className="page-content">
             {children}
           </ScrollContainer>
+          <CRTOverlay />
         </div>
         {!chatMinimized && (
           <ResizeHandle
