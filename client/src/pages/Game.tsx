@@ -26,6 +26,11 @@ const GAME_CONFIGS: Record<string, GameConfig> = {
     description: 'Keep the balls in the ring!',
     path: '/games/orbit/index.html'
   },
+  'orbit-solo': {
+    title: 'Orbit Solo',
+    description: 'Keep the balls in play with AI teammates!',
+    path: '/games/orbit-solo/index.html'
+  },
 }
 
 // Add other games from GAMES array
