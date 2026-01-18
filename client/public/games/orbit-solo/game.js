@@ -18,6 +18,12 @@ const ringSwitchBtn = document.getElementById('ring-switch-btn');
 const infoBtn = document.getElementById('info-btn');
 const infoPanel = document.getElementById('info-panel');
 const infoCloseBtn = document.getElementById('info-close-btn');
+const startScreen = document.getElementById('start-screen');
+const startBtn = document.getElementById('start-btn');
+const leaderboardEntries = document.getElementById('leaderboard-entries');
+
+// Player stats
+let playerSaves = 0;
 
 // Game constants
 const ARENA_RADIUS_RATIO = 0.35;
@@ -1704,6 +1710,7 @@ function update(dt) {
         specialBall.lastHitBy = collision.isPlayer ? 'player' : collision.aiPaddle?.name;
 
         if (collision.isPlayer) {
+          playerSaves++;
           const basePoints = 50;
           const ageBonus = getAgeBonus(specialBall.age);
           const edgeBonus = collision.edgeHit ? EDGE_HIT_BONUS * 2 : 0;
@@ -1890,6 +1897,7 @@ function update(dt) {
         ball.lastHitBy = collision.isPlayer ? 'player' : collision.aiPaddle?.name;
 
         if (collision.isPlayer) {
+          playerSaves++;
           const basePoints = 10;
           const ageBonus = getAgeBonus(ball.age);
           const edgeBonus = collision.edgeHit ? EDGE_HIT_BONUS : 0;
@@ -2270,6 +2278,7 @@ function startGame() {
   AudioSystem.init();
 
   score = 0;
+  playerSaves = 0;
   balls = [];
   powerups = [];
   activePowerups = [];
@@ -2306,6 +2315,7 @@ function startGame() {
 
   scoreDisplay.textContent = '0';
   gameOverScreen.classList.add('hidden');
+  if (startScreen) startScreen.classList.add('hidden');
 
   AudioSystem.startMusic();
   sendGameStart();
@@ -2330,6 +2340,27 @@ function endGame() {
   triggerScreenShake(20);
 
   finalScoreDisplay.textContent = score;
+
+  // Build leaderboard data
+  const leaderboardData = [
+    { name: 'YOU', saves: playerSaves, color: '#0ff', isPlayer: true },
+    ...aiPaddles.map(ai => ({ name: ai.name, saves: ai.saves, color: ai.color, isPlayer: false }))
+  ];
+
+  // Sort by saves descending
+  leaderboardData.sort((a, b) => b.saves - a.saves);
+
+  // Populate leaderboard
+  if (leaderboardEntries) {
+    leaderboardEntries.innerHTML = leaderboardData.map((entry, index) => `
+      <div class="leaderboard-entry ${entry.isPlayer ? 'player' : ''}" style="color: ${entry.color}">
+        <span class="rank">#${index + 1}</span>
+        <span class="name">${entry.name}</span>
+        <span class="saves">${entry.saves} saves</span>
+      </div>
+    `).join('');
+  }
+
   gameOverScreen.classList.remove('hidden');
 
   // Calculate local high score
@@ -2346,6 +2377,10 @@ function endGame() {
 // === EVENT LISTENERS ===
 
 restartBtn.addEventListener('click', startGame);
+
+if (startBtn) {
+  startBtn.addEventListener('click', startGame);
+}
 
 if (infoBtn && infoPanel && infoCloseBtn) {
   infoBtn.addEventListener('click', () => {
@@ -2388,9 +2423,6 @@ if (savedHighScore) {
   updateHighScoreDisplay();
 }
 
-// Start the game loop
+// Start the game loop (renders start screen)
 lastTime = performance.now();
 requestAnimationFrame(gameLoop);
-
-// Auto-start the game
-startGame();

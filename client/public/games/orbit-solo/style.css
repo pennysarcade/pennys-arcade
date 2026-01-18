@@ -244,6 +244,120 @@ canvas {
   box-shadow: 0 0 30px #0ff;
 }
 
+/* Start screen */
+#start-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.95);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  z-index: 60;
+}
+
+#start-screen h1 {
+  color: #0ff;
+  font-size: 48px;
+  margin-bottom: 20px;
+  text-shadow: 0 0 20px #0ff;
+}
+
+#start-screen p {
+  color: #888;
+  font-size: 12px;
+  margin-bottom: 15px;
+}
+
+#start-screen .ai-preview {
+  color: #fff;
+  font-size: 14px;
+  margin-bottom: 40px;
+}
+
+#start-btn {
+  padding: 20px 60px;
+  background: transparent;
+  border: 3px solid #0ff;
+  color: #0ff;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 24px;
+  cursor: pointer;
+  transition: all 0.2s;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 10px #0ff; }
+  50% { box-shadow: 0 0 30px #0ff, 0 0 50px #0ff; }
+}
+
+#start-btn:hover {
+  background: #0ff;
+  color: #000;
+  animation: none;
+  box-shadow: 0 0 40px #0ff;
+}
+
+#start-screen .start-controls {
+  margin-top: 30px;
+  color: #666;
+  font-size: 10px;
+}
+
+/* Leaderboard */
+#leaderboard {
+  background: rgba(255, 255, 255, 0.05);
+  border: 2px solid #444;
+  border-radius: 8px;
+  padding: 20px;
+  margin: 20px 0;
+  min-width: 300px;
+}
+
+#leaderboard h3 {
+  color: #0ff;
+  font-size: 14px;
+  margin-bottom: 15px;
+  text-align: center;
+}
+
+#leaderboard-entries {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.leaderboard-entry {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.leaderboard-entry.player {
+  border: 1px solid #0ff;
+  background: rgba(0, 255, 255, 0.1);
+}
+
+.leaderboard-entry .name {
+  font-weight: bold;
+}
+
+.leaderboard-entry .saves {
+  color: #888;
+}
+
+.leaderboard-entry.player .name {
+  color: #0ff;
+}
+
 /* Hidden utility class */
 .hidden {
   display: none !important;

@@ -36,9 +36,27 @@
   <!-- Mobile ring switch button -->
   <button id="ring-switch-btn" class="hidden">SWITCH</button>
 
+  <!-- Start screen -->
+  <div id="start-screen">
+    <h1>ORBIT SOLO</h1>
+    <p>Team up with AI partners to keep the balls in play!</p>
+    <div class="ai-preview">
+      <span class="ai-steady">Steady</span> &bull;
+      <span class="ai-hotshot">Hotshot</span> &bull;
+      <span class="ai-chaos">Chaos</span>
+    </div>
+    <button id="start-btn">START</button>
+    <p class="start-controls desktop-controls">WASD or drag to move | Space to switch rings</p>
+    <p class="start-controls mobile-controls">Drag to move | Tap SWITCH button</p>
+  </div>
+
   <div id="game-over-screen" class="hidden">
     <h1>GAME OVER</h1>
-    <p>Score: <span id="final-score">0</span></p>
+    <p>Team Score: <span id="final-score">0</span></p>
+    <div id="leaderboard">
+      <h3>SAVES LEADERBOARD</h3>
+      <div id="leaderboard-entries"></div>
+    </div>
     <button id="restart-btn">PLAY AGAIN</button>
   </div>
 
