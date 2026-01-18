@@ -16,6 +16,7 @@ interface GameCardProps {
   disabled?: boolean
   disabledReason?: string
   lobbyStatus?: LobbyStatus
+  multiplayer?: boolean
 }
 
 export default function GameCard({
@@ -27,6 +28,7 @@ export default function GameCard({
   disabled,
   disabledReason,
   lobbyStatus,
+  multiplayer,
 }: GameCardProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [isHovering, setIsHovering] = useState(false)
@@ -59,6 +61,13 @@ export default function GameCard({
           <span>
             {lobbyStatus.playerCount}/{lobbyStatus.maxPlayers}
           </span>
+        </div>
+      )}
+
+      {multiplayer && !lobbyStatus && (
+        <div className="game-card-live-indicator">
+          <span className="live-dot"></span>
+          <span className="live-text">LIVE</span>
         </div>
       )}
 

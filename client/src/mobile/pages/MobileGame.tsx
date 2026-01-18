@@ -13,6 +13,7 @@ interface ExtendedGameConfig extends GameConfig {
 const GAME_PATHS: Record<string, string> = {
   'tessles': '/games/tessles/index.html',
   'onzac': '/games/onzac/index.html',
+  'orbit': '/games/orbit/index.html',
 }
 
 // Build game configs from GAMES array
@@ -295,6 +296,11 @@ export default function MobileGame() {
 
   const isPlayable = !!game.path
 
+  // Check if game is multiplayer and build appropriate URL
+  const isMultiplayer = game.multiplayer
+  const gameParams = isMultiplayer ? 'mobile=true&mode=multiplayer' : 'mobile=true'
+  const gameSrc = game.path ? `${game.path}?${gameParams}` : ''
+
   return (
     <div className="mobile-game">
       <div className="mobile-game-header">
@@ -308,7 +314,7 @@ export default function MobileGame() {
           <div className="mobile-game-container">
             <iframe
               ref={iframeRef}
-              src={`${game.path}?mobile=true`}
+              src={gameSrc}
               className="mobile-game-iframe"
               title={game.title}
               allow="autoplay"

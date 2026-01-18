@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Orbit</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+  <div id="ui">
+    <div id="score">0</div>
+    <div id="high-score"></div>
+  </div>
+  <div id="welcome-screen">
+    <h1>ORBIT</h1>
+    <p>Keep the balls inside the ring!</p>
+    <p class="controls desktop-controls">WASD or drag to move | Space to switch rings</p>
+    <p class="controls mobile-controls">Drag to move | Double-tap to switch rings</p>
+    <button id="start-btn">START</button>
+  </div>
+
+  <!-- Mobile ring switch button -->
+  <button id="ring-switch-btn" class="hidden">SWITCH</button>
+  <div id="game-over-screen" class="hidden">
+    <h1>GAME OVER</h1>
+    <p>Score: <span id="final-score">0</span></p>
+    <button id="restart-btn">PLAY AGAIN</button>
+  </div>
+
+  <!-- Multiplayer UI -->
+  <div id="mp-leaderboard" class="hidden">
+    <div id="mp-leaderboard-title">PLAYERS</div>
+    <div id="mp-leaderboard-list"></div>
+  </div>
+
+  <div id="mp-spectator-indicator" class="hidden">
+    <span>SPECTATING</span>
+    <span id="mp-queue-position"></span>
+  </div>
+
+  <div id="mp-round-indicator" class="hidden">
+    <span>ROUND <span id="mp-round-number">1</span></span>
+  </div>
+
+  <div id="mp-connection-status" class="hidden">
+    <span id="mp-connection-text">Connecting...</span>
+  </div>
+
+  <script src="js/script.js"></script>
+</body>
+</html>

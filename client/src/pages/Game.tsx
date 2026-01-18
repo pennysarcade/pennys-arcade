@@ -21,6 +21,11 @@ const GAME_CONFIGS: Record<string, GameConfig> = {
     description: 'Oh no, zombies are coming!',
     path: '/games/onzac/index.html'
   },
+  'orbit': {
+    title: 'Orbit',
+    description: 'Keep the balls in the ring!',
+    path: '/games/orbit/index.html'
+  },
 }
 
 // Add other games from GAMES array
@@ -366,12 +371,17 @@ export default function Game() {
 
   const isPlayable = !!game.path
 
+  // Check if game is multiplayer and build appropriate URL
+  const gameData = GAMES.find(g => g.id === id)
+  const isMultiplayer = gameData?.multiplayer
+  const gameSrc = game.path ? (isMultiplayer ? `${game.path}?mode=multiplayer` : game.path) : ''
+
   return (
     <div className="game-page">
       {isPlayable ? (
         <iframe
           ref={iframeRef}
-          src={game.path}
+          src={gameSrc}
           className="game-iframe"
           title={game.title}
           allow="autoplay"

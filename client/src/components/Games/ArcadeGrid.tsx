@@ -33,7 +33,15 @@ export const GAMES: GameConfig[] = [
     video: '/games/onzac/banner.webm',
     platforms: 'both',
   },
-  { id: '03', title: 'Game 03', description: 'Under construction...' },
+  {
+    id: 'orbit',
+    title: 'Orbit',
+    description: 'Keep the balls in the ring!',
+    banner: '/games/orbit/banner.jpg',
+    platforms: 'both',
+    multiplayer: true,
+    maxPlayers: 8,
+  },
   { id: '04', title: 'Game 04', description: 'Under construction...' },
   { id: '05', title: 'Game 05', description: 'Under construction...' },
   { id: '06', title: 'Game 06', description: 'Under construction...' },
@@ -77,6 +85,7 @@ export default function ArcadeGrid() {
             video={game.video}
             disabled={requiresAuthButGuest}
             disabledReason={requiresAuthButGuest ? 'Register to play' : undefined}
+            multiplayer={game.multiplayer}
           />
         )
       })}

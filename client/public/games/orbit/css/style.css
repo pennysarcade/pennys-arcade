@@ -1,0 +1,295 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: #000;
+  overflow: hidden;
+  font-family: 'VT323', monospace;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#gameCanvas {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+}
+
+#ui {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  pointer-events: none;
+  z-index: 10;
+}
+
+#score {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 32px;
+  color: #fff;
+}
+
+#high-score {
+  font-family: 'VT323', monospace;
+  font-size: 18px;
+  color: #666;
+  margin-top: 5px;
+}
+
+#welcome-screen,
+#game-over-screen {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  color: #fff;
+  z-index: 100;
+}
+
+#welcome-screen h1,
+#game-over-screen h1 {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 48px;
+  color: #fff;
+  margin-bottom: 30px;
+}
+
+#welcome-screen p,
+#game-over-screen p {
+  font-size: 24px;
+  margin-bottom: 15px;
+}
+
+#welcome-screen .controls {
+  color: #666;
+  font-size: 18px;
+}
+
+button {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 16px;
+  padding: 15px 30px;
+  margin-top: 20px;
+  background: #fff;
+  border: none;
+  color: #000;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #ccc;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* Multiplayer UI */
+#mp-leaderboard {
+  position: fixed;
+  top: 60px;
+  right: 15px;
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 10px 15px;
+  min-width: 150px;
+  z-index: 50;
+}
+
+#mp-leaderboard-title {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 10px;
+  color: #666;
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+#mp-leaderboard-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mp-leaderboard-entry {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.mp-leaderboard-name {
+  font-family: 'VT323', monospace;
+  font-size: 16px;
+  color: #fff;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mp-leaderboard-score {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 10px;
+  color: #fff;
+}
+
+.mp-leaderboard-entry.is-local .mp-leaderboard-name {
+  color: #00ffff;
+}
+
+.mp-leaderboard-entry.is-inactive {
+  opacity: 0.5;
+}
+
+#mp-spectator-indicator {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.8);
+  border: 2px solid #666;
+  border-radius: 8px;
+  padding: 20px 40px;
+  text-align: center;
+  z-index: 60;
+}
+
+#mp-spectator-indicator span {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 20px;
+  color: #666;
+  display: block;
+}
+
+#mp-queue-position {
+  font-size: 14px !important;
+  margin-top: 10px;
+}
+
+#mp-round-indicator {
+  position: fixed;
+  bottom: 15px;
+  left: 15px;
+  z-index: 50;
+}
+
+#mp-round-indicator span {
+  font-family: 'VT323', monospace;
+  font-size: 16px;
+  color: #444;
+}
+
+#mp-connection-status {
+  position: fixed;
+  top: 15px;
+  left: 15px;
+  z-index: 50;
+}
+
+#mp-connection-text {
+  font-family: 'VT323', monospace;
+  font-size: 14px;
+  color: #ff8800;
+}
+
+#mp-connection-status.connected #mp-connection-text {
+  color: #00ff88;
+}
+
+/* Desktop/Mobile control text visibility */
+.desktop-controls {
+  display: block;
+}
+.mobile-controls {
+  display: none;
+}
+
+/* Mobile ring switch button */
+#ring-switch-btn {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  background: rgba(0, 255, 255, 0.2);
+  border: 2px solid rgba(0, 255, 255, 0.6);
+  color: #00ffff;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 10px;
+  cursor: pointer;
+  z-index: 100;
+  display: none;
+}
+
+#ring-switch-btn:active {
+  background: rgba(0, 255, 255, 0.4);
+  transform: scale(0.95);
+}
+
+/* Mobile responsive styles for multiplayer */
+@media (max-width: 600px) {
+  .desktop-controls {
+    display: none;
+  }
+  .mobile-controls {
+    display: block;
+  }
+
+  #ring-switch-btn {
+    display: block;
+  }
+
+  #ring-switch-btn.hidden {
+    display: none;
+  }
+  #mp-leaderboard {
+    top: auto;
+    bottom: 60px;
+    right: 10px;
+    left: 10px;
+    min-width: auto;
+    padding: 8px 10px;
+  }
+
+  #mp-leaderboard-title {
+    font-size: 8px;
+  }
+
+  .mp-leaderboard-name {
+    font-size: 14px;
+    max-width: 80px;
+  }
+
+  .mp-leaderboard-score {
+    font-size: 8px;
+  }
+
+  #mp-spectator-indicator {
+    padding: 15px 25px;
+  }
+
+  #mp-spectator-indicator span {
+    font-size: 16px;
+  }
+
+  #mp-queue-position {
+    font-size: 12px !important;
+  }
+
+  #score {
+    font-size: 24px;
+  }
+
+  #high-score {
+    font-size: 14px;
+  }
+}
