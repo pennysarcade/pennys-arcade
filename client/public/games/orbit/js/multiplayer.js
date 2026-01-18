@@ -402,10 +402,24 @@ const OrbitMultiplayer = (function() {
       return toBall;
     });
 
+    // Interpolate powerup positions
+    const interpolatedPowerups = to.state.powerups.map(toPowerup => {
+      const fromPowerup = from.state.powerups.find(p => p.id === toPowerup.id);
+      if (fromPowerup) {
+        return {
+          ...toPowerup,
+          x: lerp(fromPowerup.x, toPowerup.x, t),
+          y: lerp(fromPowerup.y, toPowerup.y, t)
+        };
+      }
+      return toPowerup;
+    });
+
     return {
       ...to.state,
       players: interpolatedPlayers,
-      balls: interpolatedBalls
+      balls: interpolatedBalls,
+      powerups: interpolatedPowerups
     };
   }
 

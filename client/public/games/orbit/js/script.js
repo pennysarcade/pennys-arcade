@@ -2984,6 +2984,12 @@ function gameLoop(timestamp) {
   }
 
   update(dt);
+
+  // Update ball positions from interpolated server state before drawing
+  if (typeof updateMPBallPositions !== 'undefined') {
+    updateMPBallPositions();
+  }
+
   draw();
 
   // Update network stats display (every 30 frames = ~0.5s)
@@ -3376,56 +3382,12 @@ function handleMPStateUpdate(state) {
     }
   }
 
-  // Update balls from server (for rendering)
-  // Server sends positions relative to center, add our centerX/centerY
-  balls = state.balls.filter(b => !b.isSpecial).map(b => ({
-    x: centerX + b.x,  // Add local center
-    y: centerY + b.y,  // Add local center
-    vx: b.vx,
-    vy: b.vy,
-    baseRadius: b.radius,
-    spawnProgress: b.spawnProgress,
-    age: b.age,
-    speedMult: 1,
-    hitCooldown: 0,
-    escaped: false,
-    spin: 0
-  }));
+  // Ball positions are updated from interpolated state in updateMPBallPositions()
+  // which is called each frame before rendering for smooth motion
 
-  // Update special ball
-  const serverSpecialBall = state.balls.find(b => b.isSpecial);
-  if (serverSpecialBall) {
-    specialBall = {
-      x: centerX + serverSpecialBall.x,  // Add local center
-      y: centerY + serverSpecialBall.y,  // Add local center
-      vx: serverSpecialBall.vx,
-      vy: serverSpecialBall.vy,
-      baseRadius: serverSpecialBall.radius,
-      spawnProgress: serverSpecialBall.spawnProgress,
-      shrinkProgress: 0,
-      age: serverSpecialBall.age,
-      speedMult: 1,
-      hitCooldown: 0,
-      spin: 0,
-      returnTime: 0
-    };
-    specialBallReturning = state.specialBallReturning;
-    specialBallReadyToReturn = state.specialBallReturning;
-  } else {
-    specialBall = null;
-    specialBallReturning = false;
-    specialBallReadyToReturn = false;
-  }
-
-  // Update powerups
-  powerups = state.powerups.map(p => ({
-    x: centerX + p.x,  // Add local center
-    y: centerY + p.y,  // Add local center
-    vx: 0,
-    vy: 0,
-    type: p.type,
-    spawnProgress: p.spawnProgress
-  }));
+  // Update wave state (these don't need interpolation)
+  specialBallReturning = state.specialBallReturning;
+  specialBallReadyToReturn = state.specialBallReturning;
 
   // Update wave state
   waveActive = state.waveActive;
@@ -3581,6 +3543,61 @@ function handleMPDisconnected(reason) {
 }
 
 // Override update function for multiplayer - send input to server
+// Update ball positions from interpolated server state (for smooth motion)
+function updateMPBallPositions() {
+  if (!MULTIPLAYER_MODE || !mpConnected) return;
+
+  // Get interpolated state for smooth rendering
+  const interpState = OrbitMultiplayer.getInterpolatedState();
+  if (!interpState) return;
+
+  // Update balls from interpolated state
+  balls = interpState.balls.filter(b => !b.isSpecial).map(b => ({
+    x: centerX + b.x,  // Add local center
+    y: centerY + b.y,  // Add local center
+    vx: b.vx,
+    vy: b.vy,
+    baseRadius: b.radius,
+    spawnProgress: b.spawnProgress,
+    age: b.age,
+    speedMult: b.speedMult || 1,
+    hitCooldown: b.hitCooldown || 0,
+    escaped: false,
+    spin: b.spin || 0
+  }));
+
+  // Update special ball
+  const interpSpecialBall = interpState.balls.find(b => b.isSpecial);
+  if (interpSpecialBall) {
+    specialBall = {
+      x: centerX + interpSpecialBall.x,
+      y: centerY + interpSpecialBall.y,
+      vx: interpSpecialBall.vx,
+      vy: interpSpecialBall.vy,
+      baseRadius: interpSpecialBall.radius,
+      spawnProgress: interpSpecialBall.spawnProgress,
+      shrinkProgress: 0,
+      age: interpSpecialBall.age,
+      speedMult: interpSpecialBall.speedMult || 1,
+      hitCooldown: interpSpecialBall.hitCooldown || 0,
+      spin: interpSpecialBall.spin || 0,
+      returnTime: 0
+    };
+  } else {
+    specialBall = null;
+  }
+
+  // Update powerups from interpolated state
+  powerups = interpState.powerups.map(p => ({
+    x: centerX + p.x,
+    y: centerY + p.y,
+    vx: p.vx || 0,
+    vy: p.vy || 0,
+    type: p.type,
+    spawnProgress: p.spawnProgress
+  }));
+}
+
 const originalUpdate = update;
 function updateMultiplayer(dt) {
   if (!MULTIPLAYER_MODE || !mpConnected || mpIsSpectator) {
