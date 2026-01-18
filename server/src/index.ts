@@ -18,13 +18,15 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
 // Ensure data directory exists
-const dataDir = join(__dirname, '../data')
+// Path is ../../../data because build outputs to dist/server/src/
+const dataDir = join(__dirname, '../../../data')
 if (!existsSync(dataDir)) {
   mkdirSync(dataDir, { recursive: true })
 }
 
 // Ensure avatars directory exists (use AVATARS_DIR env var for Railway volume, fallback for local dev)
-const avatarsDir = process.env.AVATARS_DIR || join(__dirname, '../avatars')
+// Path is ../../../avatars because build outputs to dist/server/src/
+const avatarsDir = process.env.AVATARS_DIR || join(__dirname, '../../../avatars')
 console.log(`[AVATARS] Using directory: ${avatarsDir} (env: ${process.env.AVATARS_DIR || 'not set'})`)
 if (!existsSync(avatarsDir)) {
   mkdirSync(avatarsDir, { recursive: true })
@@ -82,7 +84,8 @@ async function startServer() {
   app.use('/avatars', express.static(avatarsDir))
 
   // Serve static files from client build (production)
-  const clientDistPath = join(__dirname, '../../client/dist')
+  // Path is ../../../client/dist because build outputs to dist/server/src/
+  const clientDistPath = join(__dirname, '../../../client/dist')
   if (existsSync(clientDistPath)) {
     app.use(express.static(clientDistPath))
 
