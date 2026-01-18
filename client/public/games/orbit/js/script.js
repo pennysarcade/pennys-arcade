@@ -1774,8 +1774,11 @@ window.addEventListener('keydown', (e) => {
   } else if (key === ' ' || key === 'shift') {
     // Space or Shift to switch rings
     console.log('[ORBIT DEBUG] Space pressed, gameRunning:', gameRunning, 'mpConnected:', mpConnected, 'mpIsSpectator:', mpIsSpectator);
+    console.log('[ORBIT DEBUG] switchRing function name:', switchRing.name);
     if (gameRunning) {
+      console.log('[ORBIT DEBUG] Calling switchRing()...');
       switchRing();
+      console.log('[ORBIT DEBUG] switchRing() returned');
     }
   }
 });
@@ -3486,9 +3489,12 @@ function switchRingMultiplayer() {
 }
 
 // Apply multiplayer overrides
+console.log('[ORBIT DEBUG] MULTIPLAYER_MODE:', MULTIPLAYER_MODE);
 if (MULTIPLAYER_MODE) {
+  console.log('[ORBIT DEBUG] Applying multiplayer overrides');
   update = updateMultiplayer;
   switchRing = switchRingMultiplayer;
+  console.log('[ORBIT DEBUG] switchRing is now:', switchRing.name);
 }
 
 // Override draw function to render other players in multiplayer
