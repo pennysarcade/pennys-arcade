@@ -200,23 +200,25 @@ function paddleArcsOverlap(angle1, angle2, arcWidth) {
   return diff < arcWidth; // They overlap if angular distance < arc width
 }
 
-// Get all paddles (player + AI) as a unified list for collision checks
+// Get all paddles (player + AI + remote multiplayer) as a unified list for collision checks
 function getAllPaddles() {
   const paddles = [];
 
-  // Player paddle
-  paddles.push({
-    id: 'player',
-    angle: paddleAngle,
-    ring: paddleRing,
-    ringSwitchProgress: ringSwitchProgress,
-    ringSwitchTo: ringSwitchTo,
-    velocity: paddleVelocity,
-    isPlayer: true
-  });
+  // Player paddle (local)
+  if (!mpIsSpectator) {
+    paddles.push({
+      id: 'player',
+      angle: paddleAngle,
+      ring: paddleRing,
+      ringSwitchProgress: ringSwitchProgress,
+      ringSwitchTo: ringSwitchTo,
+      velocity: paddleVelocity,
+      isPlayer: true
+    });
+  }
 
-  // AI paddles
-  if (AI_ENABLED) {
+  // AI paddles (single player mode only)
+  if (AI_ENABLED && !MULTIPLAYER_MODE) {
     for (const ai of aiPaddles) {
       paddles.push({
         id: ai.id,
@@ -227,6 +229,25 @@ function getAllPaddles() {
         velocity: ai.velocity,
         isPlayer: false,
         ai: ai
+      });
+    }
+  }
+
+  // Remote multiplayer players
+  if (MULTIPLAYER_MODE && mpConnected) {
+    for (const id in mpOtherPlayers) {
+      const other = mpOtherPlayers[id];
+      // Infer ringSwitchTo from ring (since there are only 2 rings)
+      const inferredSwitchTo = other.ring === 0 ? 1 : 0;
+      paddles.push({
+        id: id,
+        angle: other.angle,
+        ring: other.ring,
+        ringSwitchProgress: other.ringSwitchProgress || 0,
+        ringSwitchTo: (other.ringSwitchProgress > 0) ? inferredSwitchTo : other.ring,
+        velocity: other.velocity || 0,
+        isPlayer: false,
+        isRemote: true
       });
     }
   }
@@ -294,25 +315,47 @@ function resolvePaddleCollisions() {
 
         // Total force determines who wins
         const totalForce = p1PushForce + p2PushForce + 0.1; // Small base to avoid division by zero
-        const p1Ratio = p2PushForce / totalForce; // p1 gets pushed by p2's force
-        const p2Ratio = p1PushForce / totalForce; // p2 gets pushed by p1's force
+
+        // For remote players, they act as immovable - local player takes full push
+        // Remote players are server-authoritative, we don't modify their position
+        let p1Ratio, p2Ratio;
+        if (p1.isRemote && !p2.isRemote) {
+          // p1 is remote, p2 takes full overlap
+          p1Ratio = 0;
+          p2Ratio = 1;
+        } else if (p2.isRemote && !p1.isRemote) {
+          // p2 is remote, p1 takes full overlap
+          p1Ratio = 1;
+          p2Ratio = 0;
+        } else if (p1.isRemote && p2.isRemote) {
+          // Both remote - no local collision resolution needed
+          // Just show visual effects
+          p1Ratio = 0;
+          p2Ratio = 0;
+        } else {
+          // Neither remote - normal momentum-based resolution
+          p1Ratio = p2PushForce / totalForce;
+          p2Ratio = p1PushForce / totalForce;
+        }
 
         // Calculate push amounts based on momentum
         const p1Push = overlap * p1Ratio;
         const p2Push = overlap * p2Ratio;
 
-        // Apply position correction
+        // Apply position correction (only for local player or local AI, not remote)
         if (p1.isPlayer) {
           paddleAngle = normalizeAngle(paddleAngle + p1Push * collisionDir);
         } else if (p1.ai) {
           p1.ai.angle = normalizeAngle(p1.ai.angle + p1Push * collisionDir);
         }
+        // Note: Remote players (p1.isRemote) are not modified - server is authoritative
 
         if (p2.isPlayer) {
           paddleAngle = normalizeAngle(paddleAngle - p2Push * collisionDir);
         } else if (p2.ai) {
           p2.ai.angle = normalizeAngle(p2.ai.angle - p2Push * collisionDir);
         }
+        // Note: Remote players (p2.isRemote) are not modified - server is authoritative
 
         // Velocity exchange - bounce effect with some energy loss
         const bounceFactor = 0.6;
@@ -324,12 +367,14 @@ function resolvePaddleCollisions() {
         } else if (p1.ai) {
           p1.ai.velocity = newV1;
         }
+        // Note: Remote player velocity not modified locally
 
         if (p2.isPlayer) {
           paddleVelocity = newV2;
         } else if (p2.ai) {
           p2.ai.velocity = newV2;
         }
+        // Note: Remote player velocity not modified locally
 
         // Spawn collision particles - more for harder hits
         const collisionIntensity = Math.min(1, (p1PushForce + p2PushForce) / PADDLE_SPEED);
@@ -3151,7 +3196,8 @@ async function initMultiplayer() {
       onPowerupCollected: handleMPPowerupCollected,
       onPromoted: handleMPPromoted,
       onInactiveWarning: handleMPInactiveWarning,
-      onDisconnected: handleMPDisconnected
+      onDisconnected: handleMPDisconnected,
+      onRingSwitchBlocked: handleMPRingSwitchBlocked
     });
     console.log('[ORBIT DEBUG] OrbitMultiplayer.connect() called (async)');
   } catch (error) {
@@ -3213,11 +3259,40 @@ function handleMPStateUpdate(state) {
     }
   }
 
-  // Update own score from server state
+  // Update own state from server
   if (state.players[mpPlayerId]) {
-    score = state.players[mpPlayerId].score;
+    const myServerState = state.players[mpPlayerId];
+
+    // Sync score and combo
+    score = myServerState.score;
     scoreDisplay.textContent = score;
-    combo = state.players[mpPlayerId].combo;
+    combo = myServerState.combo;
+
+    // Sync ring state from server (server is authoritative)
+    // If server says switch is complete (ringSwitchProgress=0, ring changed), update local state
+    if (myServerState.ringSwitchProgress === 0 || myServerState.ringSwitchProgress >= 1) {
+      // Switch complete or not switching - sync ring from server
+      if (paddleRing !== myServerState.ring) {
+        console.log('[ORBIT DEBUG] Server synced ring change:', paddleRing, '->', myServerState.ring);
+        paddleRing = myServerState.ring;
+      }
+      // If local animation was in progress but server says done, finish it
+      if (ringSwitchProgress > 0) {
+        ringSwitchProgress = 0;
+      }
+    } else if (myServerState.ringSwitchProgress > 0 && ringSwitchProgress === 0) {
+      // Server says we're switching but local doesn't know - sync it
+      // This handles server-initiated switches or reconnection scenarios
+      console.log('[ORBIT DEBUG] Server initiated ring switch, syncing');
+      ringSwitchFrom = myServerState.ring;
+      ringSwitchTo = myServerState.ring === 0 ? 1 : 0;
+      ringSwitchProgress = myServerState.ringSwitchProgress;
+    }
+
+    // Sync paddle arc directly from server (server handles smoothing)
+    if (myServerState.paddleArc) {
+      paddleArc = myServerState.paddleArc;
+    }
   }
 
   // Update balls from server (for rendering)
@@ -3385,6 +3460,28 @@ function handleMPInactiveWarning() {
   triggerScreenShake(3);
 }
 
+function handleMPRingSwitchBlocked() {
+  // Server rejected our ring switch (likely another player moved there)
+  console.log('[ORBIT DEBUG] Ring switch blocked by server, cancelling local animation');
+
+  // Cancel local animation if in progress
+  if (ringSwitchProgress > 0) {
+    ringSwitchProgress = 0;
+  }
+
+  // Play feedback
+  AudioSystem.playPowerupBad();
+  triggerScreenShake(2);
+
+  // Spawn red particles to indicate blocked
+  const paddleRadius = getCurrentPaddleRadius();
+  spawnParticles(
+    centerX + Math.cos(paddleAngle) * paddleRadius,
+    centerY + Math.sin(paddleAngle) * paddleRadius,
+    8, '#ff0000', 50, 3, 0.3
+  );
+}
+
 function handleMPDisconnected(reason) {
   mpConnected = false;
   mpConnectionStatus = 'error';
@@ -3454,6 +3551,18 @@ function updateMultiplayer(dt) {
   paddleAngle += paddleVelocity * dt;
   paddleAngle = normalizeAngle(paddleAngle);
 
+  // Update ring switch animation (local optimistic update)
+  if (ringSwitchProgress > 0) {
+    ringSwitchProgress += dt / RING_SWITCH_DURATION;
+    if (ringSwitchProgress >= 1) {
+      ringSwitchProgress = 0;
+      paddleRing = ringSwitchTo;
+    }
+  }
+
+  // Resolve paddle collisions (now includes remote players)
+  resolvePaddleCollisions();
+
   // Send input to server
   OrbitMultiplayer.sendInput(
     isDragging ? targetAngle : undefined,
@@ -3479,13 +3588,51 @@ function switchRingMultiplayer() {
     return;
   }
 
+  // Check if already switching
+  if (ringSwitchProgress > 0) {
+    console.log('[ORBIT DEBUG] Already switching, ignoring');
+    return;
+  }
+
+  const targetRing = paddleRing === 0 ? 1 : 0;
+
+  // Check if destination ring is blocked by another paddle (now includes remote players)
+  if (isRingSwitchBlocked(paddleAngle, targetRing, 'player')) {
+    console.log('[ORBIT DEBUG] Ring switch blocked by another player');
+    // Can't switch - play blocked sound and show feedback
+    AudioSystem.playPowerupBad();
+    triggerScreenShake(2);
+    // Spawn red particles to indicate blocked
+    const paddleRadius = getCurrentPaddleRadius();
+    spawnParticles(
+      centerX + Math.cos(paddleAngle) * paddleRadius,
+      centerY + Math.sin(paddleAngle) * paddleRadius,
+      8, '#ff0000', 50, 3, 0.3
+    );
+    return;
+  }
+
   // Send ring switch to server
   console.log('[ORBIT DEBUG] Sending ring switch to server');
   OrbitMultiplayer.sendInput(undefined, undefined, true);
 
+  // Initiate local visual animation (optimistic update)
+  ringSwitchFrom = paddleRing;
+  ringSwitchTo = targetRing;
+  ringSwitchProgress = 0.001; // Start transition
+
   // Play local feedback
   AudioSystem.playRingSwitch();
   triggerScreenShake(3);
+
+  // Spawn particles along paddle arc
+  const paddleRadius = getCurrentPaddleRadius();
+  for (let i = 0; i < 8; i++) {
+    const a = paddleAngle - paddleArc / 2 + (i / 7) * paddleArc;
+    const px = centerX + Math.cos(a) * paddleRadius;
+    const py = centerY + Math.sin(a) * paddleRadius;
+    spawnParticles(px, py, 3, '#00ffff', 100, 3, 0.3);
+  }
 }
 
 // Apply multiplayer overrides
@@ -3632,7 +3779,19 @@ function drawMultiplayer() {
 }
 
 function drawRemotePlayerPaddle(player) {
-  const paddleRadius = player.ring === 0 ? arenaRadius : innerRadius;
+  // Calculate paddle radius with ring switch animation
+  let paddleRadius;
+  const progress = player.ringSwitchProgress || 0;
+  if (progress > 0 && progress < 1) {
+    // Player is switching rings - interpolate radius
+    const fromRadius = player.ring === 0 ? arenaRadius : innerRadius;
+    const toRadius = player.ring === 0 ? innerRadius : arenaRadius; // Opposite ring
+    paddleRadius = fromRadius + (toRadius - fromRadius) * progress;
+  } else {
+    // Not switching - use current ring
+    paddleRadius = player.ring === 0 ? arenaRadius : innerRadius;
+  }
+
   const alpha = player.phaseInProgress || 1;
   const color = player.avatarColor || '#00ff88';
 

@@ -24,6 +24,7 @@ const OrbitMultiplayer = (function() {
   let onPromoted = null;
   let onInactiveWarning = null;
   let onDisconnected = null;
+  let onRingSwitchBlocked = null;
 
   // Get auth token from parent window or URL
   function getAuthToken() {
@@ -81,6 +82,7 @@ const OrbitMultiplayer = (function() {
     onPromoted = callbacks.onPromoted;
     onInactiveWarning = callbacks.onInactiveWarning;
     onDisconnected = callbacks.onDisconnected;
+    onRingSwitchBlocked = callbacks.onRingSwitchBlocked;
 
     // Get auth token
     console.log('[ORBIT DEBUG] Getting auth token...');
@@ -250,8 +252,8 @@ const OrbitMultiplayer = (function() {
     });
 
     socket.on('orbit:ring_switch_blocked', () => {
-      console.log('[ORBIT MP] Ring switch blocked');
-      // Could trigger visual/audio feedback
+      console.log('[ORBIT MP] Ring switch blocked by server');
+      if (onRingSwitchBlocked) onRingSwitchBlocked();
     });
   }
 
