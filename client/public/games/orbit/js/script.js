@@ -18,6 +18,10 @@ let mpOtherPlayers = {}; // { id: { angle, velocity, ring, score, combo, usernam
 let mpRoundNumber = 1;
 let mpConnected = false;
 
+// Local hit state tracker - survives server state updates
+// Stores { ballId: { cooldown, vx, vy, speedMult, timestamp } }
+const localBallHitState = new Map();
+
 // DOM elements
 const scoreDisplay = document.getElementById('score');
 const highScoreDisplay = document.getElementById('high-score');
@@ -3409,6 +3413,9 @@ function handleMPRoundStart(data) {
   particles.length = 0;
   scorePopups.length = 0;
 
+  // Clear local hit state tracker for new round
+  localBallHitState.clear();
+
   // Show game again if hidden
   gameOverScreen.classList.add('hidden');
   gameRunning = true;
@@ -3451,16 +3458,23 @@ function handleMPBallHit(data) {
   }
 
   if (data.playerId === mpPlayerId) {
-    // Our hit - spawn score popup and play combo sound
-    // (sound already played locally by checkMPBallCollisions)
+    // Our hit confirmed by server - clear local hit state (server has caught up)
+    if (data.ballId) {
+      localBallHitState.delete(data.ballId);
+    }
+
+    // Play combo sound (regular hit sound already played locally)
     if (data.combo >= 3) {
       AudioSystem.playCombo(Math.min(4, Math.floor(data.combo / 5)));
     }
   } else {
-    // Another player's hit - apply the server's ball velocity
-    // This ensures we see the correct ball trajectory
+    // Another player's hit - clear any local state and use server's authoritative state
+    if (data.ballId) {
+      localBallHitState.delete(data.ballId);
+    }
+
+    // Apply the server's ball velocity
     if (data.newVx !== undefined && data.newVy !== undefined && data.ballId) {
-      // Find and update the ball
       if (data.isSpecial && specialBall && specialBall.id === data.ballId) {
         specialBall.vx = data.newVx;
         specialBall.vy = data.newVy;
@@ -3572,40 +3586,84 @@ function updateMPBallPositions() {
   const interpState = OrbitMultiplayer.getInterpolatedState();
   if (!interpState) return;
 
-  // Update balls from interpolated state - include ball ID for collision reporting
-  balls = interpState.balls.filter(b => !b.isSpecial).map(b => ({
-    id: b.id,  // Track ball ID for hit reporting
-    x: centerX + b.x,  // Add local center
-    y: centerY + b.y,  // Add local center
-    vx: b.vx,
-    vy: b.vy,
-    baseRadius: b.radius,
-    spawnProgress: b.spawnProgress,
-    age: b.age,
-    speedMult: b.speedMult || 1,
-    hitCooldown: b.hitCooldown || 0,
-    escaped: false,
-    spin: b.spin || 0
-  }));
+  // Update balls from interpolated state, but PRESERVE local hit state
+  balls = interpState.balls.filter(b => !b.isSpecial).map(b => {
+    const localHit = localBallHitState.get(b.id);
 
-  // Update special ball
+    // If we have a local hit record with remaining cooldown, preserve velocity and cooldown
+    // This prevents server state from overwriting our local collision detection
+    if (localHit && localHit.cooldown > 0) {
+      return {
+        id: b.id,
+        x: centerX + b.x,  // Use server position (will catch up)
+        y: centerY + b.y,
+        vx: localHit.vx,  // Use LOCAL deflected velocity
+        vy: localHit.vy,
+        baseRadius: b.radius,
+        spawnProgress: b.spawnProgress,
+        age: b.age,
+        speedMult: localHit.speedMult || 1,
+        hitCooldown: localHit.cooldown,  // Use LOCAL cooldown (critical!)
+        escaped: false,
+        spin: b.spin || 0
+      };
+    }
+
+    // No local hit, use server state
+    return {
+      id: b.id,
+      x: centerX + b.x,
+      y: centerY + b.y,
+      vx: b.vx,
+      vy: b.vy,
+      baseRadius: b.radius,
+      spawnProgress: b.spawnProgress,
+      age: b.age,
+      speedMult: b.speedMult || 1,
+      hitCooldown: b.hitCooldown || 0,
+      escaped: false,
+      spin: b.spin || 0
+    };
+  });
+
+  // Update special ball with same local hit preservation
   const interpSpecialBall = interpState.balls.find(b => b.isSpecial);
   if (interpSpecialBall) {
-    specialBall = {
-      id: interpSpecialBall.id,  // Track ball ID for hit reporting
-      x: centerX + interpSpecialBall.x,
-      y: centerY + interpSpecialBall.y,
-      vx: interpSpecialBall.vx,
-      vy: interpSpecialBall.vy,
-      baseRadius: interpSpecialBall.radius,
-      spawnProgress: interpSpecialBall.spawnProgress,
-      shrinkProgress: 0,
-      age: interpSpecialBall.age,
-      speedMult: interpSpecialBall.speedMult || 1,
-      hitCooldown: interpSpecialBall.hitCooldown || 0,
-      spin: interpSpecialBall.spin || 0,
-      returnTime: 0
-    };
+    const localHit = localBallHitState.get(interpSpecialBall.id);
+
+    if (localHit && localHit.cooldown > 0) {
+      specialBall = {
+        id: interpSpecialBall.id,
+        x: centerX + interpSpecialBall.x,
+        y: centerY + interpSpecialBall.y,
+        vx: localHit.vx,
+        vy: localHit.vy,
+        baseRadius: interpSpecialBall.radius,
+        spawnProgress: interpSpecialBall.spawnProgress,
+        shrinkProgress: 0,
+        age: interpSpecialBall.age,
+        speedMult: localHit.speedMult || 1,
+        hitCooldown: localHit.cooldown,
+        spin: interpSpecialBall.spin || 0,
+        returnTime: 0
+      };
+    } else {
+      specialBall = {
+        id: interpSpecialBall.id,
+        x: centerX + interpSpecialBall.x,
+        y: centerY + interpSpecialBall.y,
+        vx: interpSpecialBall.vx,
+        vy: interpSpecialBall.vy,
+        baseRadius: interpSpecialBall.radius,
+        spawnProgress: interpSpecialBall.spawnProgress,
+        shrinkProgress: 0,
+        age: interpSpecialBall.age,
+        speedMult: interpSpecialBall.speedMult || 1,
+        hitCooldown: interpSpecialBall.hitCooldown || 0,
+        spin: interpSpecialBall.spin || 0,
+        returnTime: 0
+      };
+    }
   } else {
     specialBall = null;
   }
@@ -3621,21 +3679,59 @@ function updateMPBallPositions() {
   }));
 }
 
+// Decay local ball hit state each frame
+function decayLocalBallHitState(dt) {
+  for (const [ballId, hitState] of localBallHitState) {
+    hitState.cooldown -= dt;
+    if (hitState.cooldown <= 0) {
+      localBallHitState.delete(ballId);
+    }
+  }
+}
+
 // Client-side collision detection for multiplayer
 // Detects hits locally and reports them to the server for immediate responsiveness
-function checkMPBallCollisions() {
+function checkMPBallCollisions(dt) {
   if (!MULTIPLAYER_MODE || !mpConnected || mpIsSpectator) return;
+
+  // First, decay local hit state
+  decayLocalBallHitState(dt);
 
   // Check regular balls
   for (const ball of balls) {
-    if (!ball.id || ball.hitCooldown > 0) continue;
+    if (!ball.id) continue;
+
+    // Check local hit state first (survives server overwrites)
+    const localHit = localBallHitState.get(ball.id);
+    if (localHit && localHit.cooldown > 0) continue;
+
+    // Also check ball's own cooldown
+    if (ball.hitCooldown > 0) continue;
 
     const ballRadius = ball.baseRadius * (ball.spawnProgress || 1);
     const collision = checkPaddleCollision(ball.x, ball.y, ballRadius);
 
     if (collision.hit) {
-      // Check if we already reported this hit
+      // Check if we already reported this hit recently
       if (OrbitMultiplayer.wasLocalHit(ball.id)) continue;
+
+      // Calculate deflected velocity
+      const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
+      const newVx = Math.cos(collision.deflectAngle) * speed;
+      const newVy = Math.sin(collision.deflectAngle) * speed;
+
+      // Add momentum from paddle velocity
+      const momentumBoost = 1 + Math.abs(paddleVelocity) / PADDLE_SPEED * 0.8;
+      const newSpeedMult = Math.min(1.8, (ball.speedMult || 1) * momentumBoost);
+
+      // Record in local hit state tracker (survives server state updates)
+      localBallHitState.set(ball.id, {
+        cooldown: 0.25,  // 250ms cooldown to survive multiple server updates
+        vx: newVx,
+        vy: newVy,
+        speedMult: newSpeedMult,
+        timestamp: Date.now()
+      });
 
       // Report hit to server
       OrbitMultiplayer.sendBallHit(
@@ -3647,14 +3743,10 @@ function checkMPBallCollisions() {
       );
 
       // Apply hit locally for immediate feedback
-      const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
-      ball.vx = Math.cos(collision.deflectAngle) * speed;
-      ball.vy = Math.sin(collision.deflectAngle) * speed;
-      ball.hitCooldown = 0.15;
-
-      // Add momentum from paddle velocity
-      const momentumBoost = 1 + Math.abs(paddleVelocity) / PADDLE_SPEED * 0.8;
-      ball.speedMult = Math.min(1.8, (ball.speedMult || 1) * momentumBoost);
+      ball.vx = newVx;
+      ball.vy = newVy;
+      ball.hitCooldown = 0.25;
+      ball.speedMult = newSpeedMult;
 
       // Visual feedback
       AudioSystem.playPaddleHit(collision.edgeHit, ball.speedMult);
@@ -3664,13 +3756,36 @@ function checkMPBallCollisions() {
   }
 
   // Check special ball
-  if (specialBall && specialBall.id && specialBall.hitCooldown <= 0) {
+  if (specialBall && specialBall.id) {
+    // Check local hit state first
+    const localHit = localBallHitState.get(specialBall.id);
+    if (localHit && localHit.cooldown > 0) return;
+    if (specialBall.hitCooldown > 0) return;
+
     const ballRadius = specialBall.baseRadius * (specialBall.spawnProgress || 1);
     const collision = checkPaddleCollision(specialBall.x, specialBall.y, ballRadius);
 
     if (collision.hit) {
       // Check if we already reported this hit
       if (OrbitMultiplayer.wasLocalHit(specialBall.id)) return;
+
+      // Calculate deflected velocity
+      const speed = Math.sqrt(specialBall.vx * specialBall.vx + specialBall.vy * specialBall.vy);
+      const newVx = Math.cos(collision.deflectAngle) * speed;
+      const newVy = Math.sin(collision.deflectAngle) * speed;
+
+      // Add momentum
+      const momentumBoost = 1 + Math.abs(paddleVelocity) / PADDLE_SPEED * 0.8;
+      const newSpeedMult = Math.min(1.8, (specialBall.speedMult || 1) * momentumBoost);
+
+      // Record in local hit state tracker
+      localBallHitState.set(specialBall.id, {
+        cooldown: 0.25,
+        vx: newVx,
+        vy: newVy,
+        speedMult: newSpeedMult,
+        timestamp: Date.now()
+      });
 
       // Report hit to server
       OrbitMultiplayer.sendBallHit(
@@ -3682,14 +3797,10 @@ function checkMPBallCollisions() {
       );
 
       // Apply hit locally for immediate feedback
-      const speed = Math.sqrt(specialBall.vx * specialBall.vx + specialBall.vy * specialBall.vy);
-      specialBall.vx = Math.cos(collision.deflectAngle) * speed;
-      specialBall.vy = Math.sin(collision.deflectAngle) * speed;
-      specialBall.hitCooldown = 0.15;
-
-      // Add momentum
-      const momentumBoost = 1 + Math.abs(paddleVelocity) / PADDLE_SPEED * 0.8;
-      specialBall.speedMult = Math.min(1.8, (specialBall.speedMult || 1) * momentumBoost);
+      specialBall.vx = newVx;
+      specialBall.vy = newVy;
+      specialBall.hitCooldown = 0.25;
+      specialBall.speedMult = newSpeedMult;
 
       // Visual feedback
       AudioSystem.playSpecialHit();
@@ -3763,7 +3874,7 @@ function updateMultiplayer(dt) {
   resolvePaddleCollisions();
 
   // Client-side ball collision detection - for responsive hits
-  checkMPBallCollisions();
+  checkMPBallCollisions(dt);
 
   // Send input to server
   OrbitMultiplayer.sendInput(
