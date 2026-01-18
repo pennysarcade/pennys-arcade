@@ -84,8 +84,8 @@ async function startServer() {
   app.use('/avatars', express.static(avatarsDir))
 
   // Serve static files from client build (production)
-  // Path is ../../../client/dist because build outputs to dist/server/src/
-  const clientDistPath = join(__dirname, '../../../client/dist')
+  // Path is ../../../../client/dist because build outputs to server/dist/server/src/
+  const clientDistPath = join(__dirname, '../../../../client/dist')
   if (existsSync(clientDistPath)) {
     app.use(express.static(clientDistPath))
 
