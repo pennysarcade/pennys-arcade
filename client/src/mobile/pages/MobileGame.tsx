@@ -13,7 +13,6 @@ interface ExtendedGameConfig extends GameConfig {
 const GAME_PATHS: Record<string, string> = {
   'tessles': '/games/tessles/index.html',
   'onzac': '/games/onzac/index.html',
-  'orbit': '/games/orbit/index.html',
 }
 
 // Build game configs from GAMES array
