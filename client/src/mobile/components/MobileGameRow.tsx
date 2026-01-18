@@ -7,8 +7,8 @@ export default function MobileGameRow() {
 
   const isGuest = user?.isGuest ?? true
 
-  // Filter out desktop-only games, then sort: active games (with banners) first
-  const mobileGames = GAMES.filter((game) => game.platforms !== 'desktop')
+  // Filter out desktop-only and hidden games, then sort: active games (with banners) first
+  const mobileGames = GAMES.filter((game) => game.platforms !== 'desktop' && !game.hidden)
   const sortedGames = [...mobileGames].sort((a, b) => {
     const aActive = !!a.banner
     const bActive = !!b.banner

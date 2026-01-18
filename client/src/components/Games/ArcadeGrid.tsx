@@ -14,6 +14,7 @@ export interface GameConfig {
   requiresAuth?: boolean // requires registered user (not guest)
   multiplayer?: boolean // has real-time multiplayer lobby
   maxPlayers?: number // for multiplayer games
+  hidden?: boolean // hidden from game list but still accessible via direct URL
 }
 
 export const GAMES: GameConfig[] = [
@@ -41,7 +42,9 @@ export const GAMES: GameConfig[] = [
     platforms: 'both',
     multiplayer: true,
     maxPlayers: 8,
+    hidden: true,
   },
+  { id: '03', title: 'Game 03', description: 'Under construction...' },
   { id: '04', title: 'Game 04', description: 'Under construction...' },
   { id: '05', title: 'Game 05', description: 'Under construction...' },
   { id: '06', title: 'Game 06', description: 'Under construction...' },
@@ -64,8 +67,8 @@ export const GAMES: GameConfig[] = [
 export default function ArcadeGrid() {
   const { user } = useAuth()
 
-  // Filter out mobile-only games for desktop view
-  const desktopGames = GAMES.filter((game) => game.platforms !== 'mobile')
+  // Filter out mobile-only and hidden games for desktop view
+  const desktopGames = GAMES.filter((game) => game.platforms !== 'mobile' && !game.hidden)
 
   const isGuest = user?.isGuest ?? true
 
