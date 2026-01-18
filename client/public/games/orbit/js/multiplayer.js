@@ -67,6 +67,8 @@ const OrbitMultiplayer = (function() {
 
   // Initialize socket connection
   async function connect(callbacks) {
+    console.log('[ORBIT DEBUG] connect() called');
+
     // Store callbacks
     onStateUpdate = callbacks.onStateUpdate;
     onJoined = callbacks.onJoined;
@@ -81,57 +83,105 @@ const OrbitMultiplayer = (function() {
     onDisconnected = callbacks.onDisconnected;
 
     // Get auth token
+    console.log('[ORBIT DEBUG] Getting auth token...');
     const token = await getAuthToken();
+    console.log('[ORBIT DEBUG] Auth token:', token ? 'received' : 'null (guest mode)');
 
     // Connect to socket
     const serverUrl = getServerUrl();
-    console.log('[ORBIT MP] Connecting to', serverUrl);
+    console.log('[ORBIT DEBUG] Server URL:', serverUrl);
+    console.log('[ORBIT DEBUG] Window location:', window.location.href);
 
     // Load socket.io client if not already loaded
     if (typeof io === 'undefined') {
-      await new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        script.src = serverUrl + '/socket.io/socket.io.js';
-        script.onload = resolve;
-        script.onerror = reject;
-        document.head.appendChild(script);
-      });
+      console.log('[ORBIT DEBUG] Loading socket.io library...');
+      try {
+        await new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          const scriptUrl = serverUrl + '/socket.io/socket.io.js';
+          console.log('[ORBIT DEBUG] Socket.io script URL:', scriptUrl);
+          script.src = scriptUrl;
+          script.onload = () => {
+            console.log('[ORBIT DEBUG] Socket.io library loaded successfully');
+            resolve();
+          };
+          script.onerror = (e) => {
+            console.error('[ORBIT DEBUG] Socket.io script load error:', e);
+            reject(new Error('Failed to load socket.io library'));
+          };
+          // Add timeout for script loading
+          setTimeout(() => {
+            console.error('[ORBIT DEBUG] Socket.io script load timeout after 15s');
+            reject(new Error('Socket.io library load timeout'));
+          }, 15000);
+          document.head.appendChild(script);
+        });
+      } catch (error) {
+        console.error('[ORBIT DEBUG] Failed to load socket.io:', error);
+        if (onDisconnected) onDisconnected(error.message || 'Failed to load socket library');
+        return;
+      }
+    } else {
+      console.log('[ORBIT DEBUG] Socket.io already loaded');
     }
 
+    console.log('[ORBIT DEBUG] Creating socket connection...');
     socket = io(serverUrl, {
       transports: ['websocket', 'polling'],
       timeout: 10000
     });
+    console.log('[ORBIT DEBUG] Socket created, waiting for connect event...');
+
+    // Join timeout - if we don't receive orbit:joined within 10 seconds after connect, error
+    let joinTimeout = null;
+    let hasJoined = false;
 
     // Connection events
     socket.on('connect', () => {
-      console.log('[ORBIT MP] Connected to server');
+      console.log('[ORBIT DEBUG] Socket connected! Socket ID:', socket.id);
       connected = true;
 
       // Join the orbit game
+      console.log('[ORBIT DEBUG] Emitting orbit:join event...');
       socket.emit('orbit:join', { token });
+
+      // Set timeout for join response
+      joinTimeout = setTimeout(() => {
+        if (!hasJoined) {
+          console.error('[ORBIT DEBUG] Join timeout - no orbit:joined response after 10s');
+          if (onDisconnected) onDisconnected('Server did not respond to join request');
+        }
+      }, 10000);
     });
 
     socket.on('disconnect', (reason) => {
-      console.log('[ORBIT MP] Disconnected:', reason);
+      console.log('[ORBIT DEBUG] Socket disconnected:', reason);
       connected = false;
       playerId = null;
       if (onDisconnected) onDisconnected(reason);
     });
 
     socket.on('connect_error', (error) => {
-      console.error('[ORBIT MP] Connection error:', error);
+      console.error('[ORBIT DEBUG] Connection error:', error.message || error);
+      // Notify main script of connection failure
+      if (onDisconnected) onDisconnected('Connection failed: ' + (error.message || 'Server unreachable'));
     });
 
     // Game events
     socket.on('orbit:joined', (data) => {
-      console.log('[ORBIT MP] Joined game:', data);
+      console.log('[ORBIT DEBUG] Received orbit:joined event:', JSON.stringify(data));
+      hasJoined = true;
+      if (joinTimeout) clearTimeout(joinTimeout);
       playerId = data.playerId;
       isSpectator = data.isSpectator;
       if (onJoined) onJoined(data);
     });
 
     socket.on('orbit:state', (state) => {
+      // Log first state update for debugging
+      if (!lastServerState) {
+        console.log('[ORBIT DEBUG] Received first orbit:state update, players:', Object.keys(state.players).length, 'balls:', state.balls.length);
+      }
       lastServerState = state;
       // Add to interpolation buffer with timestamp
       interpolationBuffer.push({

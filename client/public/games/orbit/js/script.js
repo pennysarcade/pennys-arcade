@@ -1,6 +1,8 @@
 // === ORBIT - A circular pong game ===
+console.log('[ORBIT DEBUG] Script starting...');
 
 const canvas = document.getElementById('gameCanvas');
+console.log('[ORBIT DEBUG] Canvas element:', canvas ? 'found' : 'NOT FOUND');
 const ctx = canvas.getContext('2d');
 
 // === MULTIPLAYER (ALWAYS ON) ===
@@ -1703,6 +1705,7 @@ function switchRing() {
 
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
+console.log('[ORBIT DEBUG] After resizeCanvas - canvas:', canvas.width, 'x', canvas.height, 'center:', centerX, centerY, 'arenaRadius:', arenaRadius);
 
 // === INPUT HANDLING ===
 
@@ -2913,8 +2916,17 @@ function draw() {
 }
 
 // === GAME LOOP ===
+let gameLoopFrameCount = 0;
 
 function gameLoop(timestamp) {
+  gameLoopFrameCount++;
+  // Log first frame and every 5 seconds (300 frames at 60fps)
+  if (gameLoopFrameCount === 1) {
+    console.log('[ORBIT DEBUG] Game loop started, first frame');
+  } else if (gameLoopFrameCount % 300 === 0) {
+    console.log('[ORBIT DEBUG] Game loop running, frame:', gameLoopFrameCount, 'connected:', mpConnected, 'status:', mpConnectionStatus);
+  }
+
   const dt = Math.min((timestamp - lastTime) / 1000, 0.1); // Cap delta time
   lastTime = timestamp;
 
@@ -3085,48 +3097,75 @@ if (ringSwitchBtn) {
 
 // === MULTIPLAYER INTEGRATION (ALWAYS ON) ===
 
+// Connection status for UI feedback
+let mpConnectionStatus = 'connecting'; // 'connecting', 'connected', 'error'
+let mpConnectionError = null;
+
 // Initialize multiplayer immediately on load
 initMultiplayer();
 
 async function initMultiplayer() {
-  console.log('[ORBIT] Connecting to multiplayer server...');
+  console.log('[ORBIT DEBUG] initMultiplayer() called');
+  console.log('[ORBIT DEBUG] Canvas:', canvas.width, 'x', canvas.height);
+  console.log('[ORBIT DEBUG] Center:', centerX, centerY, 'Arena radius:', arenaRadius);
+  mpConnectionStatus = 'connecting';
 
   // Start the game loop immediately - players will observe the action
   gameRunning = true;
+  console.log('[ORBIT DEBUG] gameRunning set to true');
 
-  // Load multiplayer.js if not already loaded
-  if (typeof OrbitMultiplayer === 'undefined') {
-    await new Promise((resolve, reject) => {
-      const script = document.createElement('script');
-      script.src = 'js/multiplayer.js';
-      script.onload = resolve;
-      script.onerror = reject;
-      document.head.appendChild(script);
+  try {
+    // Load multiplayer.js if not already loaded
+    if (typeof OrbitMultiplayer === 'undefined') {
+      console.log('[ORBIT DEBUG] Loading multiplayer.js...');
+      await new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'js/multiplayer.js';
+        script.onload = () => {
+          console.log('[ORBIT DEBUG] multiplayer.js loaded successfully');
+          resolve();
+        };
+        script.onerror = (err) => {
+          console.error('[ORBIT DEBUG] Failed to load multiplayer.js:', err);
+          reject(new Error('Failed to load multiplayer module'));
+        };
+        document.head.appendChild(script);
+      });
+    } else {
+      console.log('[ORBIT DEBUG] OrbitMultiplayer already defined');
+    }
+
+    // Connect to server
+    console.log('[ORBIT DEBUG] Calling OrbitMultiplayer.connect()...');
+    OrbitMultiplayer.connect({
+      onJoined: handleMPJoined,
+      onStateUpdate: handleMPStateUpdate,
+      onRoundStart: handleMPRoundStart,
+      onRoundEnd: handleMPRoundEnd,
+      onBallHit: handleMPBallHit,
+      onSpecialBallSpawn: handleMPSpecialBallSpawn,
+      onWaveStart: handleMPWaveStart,
+      onPowerupCollected: handleMPPowerupCollected,
+      onPromoted: handleMPPromoted,
+      onInactiveWarning: handleMPInactiveWarning,
+      onDisconnected: handleMPDisconnected
     });
+    console.log('[ORBIT DEBUG] OrbitMultiplayer.connect() called (async)');
+  } catch (error) {
+    console.error('[ORBIT DEBUG] Error in initMultiplayer:', error);
+    mpConnectionStatus = 'error';
+    mpConnectionError = error.message || 'Connection failed';
   }
-
-  // Connect to server
-  OrbitMultiplayer.connect({
-    onJoined: handleMPJoined,
-    onStateUpdate: handleMPStateUpdate,
-    onRoundStart: handleMPRoundStart,
-    onRoundEnd: handleMPRoundEnd,
-    onBallHit: handleMPBallHit,
-    onSpecialBallSpawn: handleMPSpecialBallSpawn,
-    onWaveStart: handleMPWaveStart,
-    onPowerupCollected: handleMPPowerupCollected,
-    onPromoted: handleMPPromoted,
-    onInactiveWarning: handleMPInactiveWarning,
-    onDisconnected: handleMPDisconnected
-  });
 }
 
 function handleMPJoined(data) {
-  console.log('[ORBIT] Joined multiplayer:', data);
+  console.log('[ORBIT DEBUG] handleMPJoined called with:', JSON.stringify(data));
   mpPlayerId = data.playerId;
   mpIsSpectator = data.isSpectator;
   mpRoundNumber = data.roundNumber;
   mpConnected = true;
+  mpConnectionStatus = 'connected';
+  console.log('[ORBIT DEBUG] Connection status set to connected, isSpectator:', mpIsSpectator);
 
   if (data.isSpectator) {
     sendTickerMessage(`Watching the action - click JOIN to play!`);
@@ -3345,6 +3384,8 @@ function handleMPInactiveWarning() {
 
 function handleMPDisconnected(reason) {
   mpConnected = false;
+  mpConnectionStatus = 'error';
+  mpConnectionError = reason || 'Disconnected';
   gameRunning = false;
   sendTickerMessage('Disconnected from server');
 
@@ -3464,7 +3505,7 @@ function drawMultiplayer() {
   ctx.translate(screenShake.x, screenShake.y);
 
   // Draw arena rings
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
   ctx.lineWidth = 2;
 
   // Outer ring
@@ -3556,6 +3597,27 @@ function drawMultiplayer() {
   ctx.textAlign = 'left';
   ctx.fillStyle = '#444';
   ctx.fillText(`ROUND ${mpRoundNumber}`, 20, canvas.height - 20);
+
+  // Draw connection status indicator
+  if (mpConnectionStatus === 'connecting') {
+    ctx.font = '12px "Press Start 2P", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffff00';
+    const dots = '.'.repeat(Math.floor(gameTime * 2) % 4);
+    ctx.fillText(`CONNECTING${dots}`, centerX, centerY - 20);
+    ctx.font = '10px "Press Start 2P", monospace';
+    ctx.fillStyle = '#888';
+    ctx.fillText('Please wait', centerX, centerY + 10);
+  } else if (mpConnectionStatus === 'error') {
+    ctx.font = '12px "Press Start 2P", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ff4444';
+    ctx.fillText('CONNECTION ERROR', centerX, centerY - 20);
+    ctx.font = '10px "Press Start 2P", monospace';
+    ctx.fillStyle = '#888';
+    ctx.fillText(mpConnectionError || 'Check your connection', centerX, centerY + 10);
+    ctx.fillText('Refresh to retry', centerX, centerY + 30);
+  }
 
   ctx.restore();
 }
