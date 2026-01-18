@@ -1,4 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
+import { useSocket } from './SocketContext'
+import { useAuth } from './AuthContext'
 
 export interface CRTSettings {
   enabled: boolean
@@ -26,70 +28,178 @@ export const DEFAULT_CRT_SETTINGS: CRTSettings = {
   saturation: 1,
 }
 
-const STORAGE_KEY = 'arcade-crt-settings'
-
 interface CRTContextType {
-  settings: CRTSettings
-  updateSettings: (updates: Partial<CRTSettings>) => void
-  updateNestedSettings: <K extends keyof CRTSettings>(
+  // Active settings (what's displayed) - comes from server or is null if disabled
+  settings: CRTSettings | null
+  // Local preview settings for admin panel (always has values for sliders)
+  localSettings: CRTSettings
+  // Whether we're in preview mode (admin adjusting settings locally)
+  isPreviewMode: boolean
+  // Loading state
+  isLoading: boolean
+  // Update local preview settings
+  updateLocalSettings: (updates: Partial<CRTSettings>) => void
+  updateNestedLocalSettings: <K extends keyof CRTSettings>(
     key: K,
     updates: Partial<CRTSettings[K]>
   ) => void
+  // Reset local settings to defaults
   resetToDefaults: () => void
+  // Push current local settings to all users (admin only)
+  pushToAllUsers: () => Promise<void>
+  // Turn CRT on/off globally (admin only)
+  setGlobalEnabled: (enabled: boolean) => Promise<void>
+  // Enable preview mode to see changes before pushing
+  setPreviewMode: (enabled: boolean) => void
 }
 
 const CRTContext = createContext<CRTContextType | undefined>(undefined)
 
-function loadSettings(): CRTSettings {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY)
-    if (saved) {
-      const parsed = JSON.parse(saved)
-      // Merge with defaults to handle any new properties
-      return { ...DEFAULT_CRT_SETTINGS, ...parsed }
-    }
-  } catch {
-    // Invalid JSON, use defaults
-  }
-  return DEFAULT_CRT_SETTINGS
-}
-
-function saveSettings(settings: CRTSettings): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
-  } catch {
-    // Storage full or unavailable
-  }
-}
-
 export function CRTProvider({ children }: { children: ReactNode }) {
-  const [settings, setSettings] = useState<CRTSettings>(loadSettings)
+  const { socket } = useSocket()
+  const { token } = useAuth()
 
-  // Persist to localStorage when settings change
+  // Server-side settings (null means CRT is globally disabled)
+  const [serverSettings, setServerSettings] = useState<CRTSettings | null>(null)
+  // Local settings for admin preview/editing
+  const [localSettings, setLocalSettings] = useState<CRTSettings>(DEFAULT_CRT_SETTINGS)
+  // Preview mode - when true, show localSettings instead of serverSettings
+  const [isPreviewMode, setIsPreviewMode] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+
+  // Fetch initial settings from server
   useEffect(() => {
-    saveSettings(settings)
-  }, [settings])
-
-  const updateSettings = useCallback((updates: Partial<CRTSettings>) => {
-    setSettings(prev => ({ ...prev, ...updates }))
+    fetch('/api/auth/crt-settings')
+      .then(res => res.json())
+      .then(data => {
+        if (data) {
+          setServerSettings(data)
+          setLocalSettings(data)
+        } else {
+          setServerSettings(null)
+          // Keep default local settings for admin panel
+        }
+        setIsLoading(false)
+      })
+      .catch(err => {
+        console.error('Failed to fetch CRT settings:', err)
+        setIsLoading(false)
+      })
   }, [])
 
-  const updateNestedSettings = useCallback(<K extends keyof CRTSettings>(
+  // Listen for socket updates
+  useEffect(() => {
+    if (!socket) return
+
+    const handleCRTSettings = (data: CRTSettings) => {
+      setServerSettings(data)
+      // Also update local settings if not in preview mode
+      if (!isPreviewMode) {
+        setLocalSettings(data)
+      }
+    }
+
+    socket.on('site:crtSettings', handleCRTSettings)
+
+    return () => {
+      socket.off('site:crtSettings', handleCRTSettings)
+    }
+  }, [socket, isPreviewMode])
+
+  // The active settings to display
+  const settings = isPreviewMode ? localSettings : serverSettings
+
+  const updateLocalSettings = useCallback((updates: Partial<CRTSettings>) => {
+    setLocalSettings(prev => ({ ...prev, ...updates }))
+  }, [])
+
+  const updateNestedLocalSettings = useCallback(<K extends keyof CRTSettings>(
     key: K,
     updates: Partial<CRTSettings[K]>
   ) => {
-    setSettings(prev => ({
+    setLocalSettings(prev => ({
       ...prev,
       [key]: { ...(prev[key] as object), ...updates }
     }))
   }, [])
 
   const resetToDefaults = useCallback(() => {
-    setSettings(DEFAULT_CRT_SETTINGS)
+    setLocalSettings(DEFAULT_CRT_SETTINGS)
+  }, [])
+
+  const pushToAllUsers = useCallback(async () => {
+    if (!token) return
+
+    try {
+      const response = await fetch('/api/auth/admin/crt-settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ settings: localSettings }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to push CRT settings')
+      }
+
+      // Server will broadcast to all clients via socket
+      // Exit preview mode since settings are now live
+      setIsPreviewMode(false)
+    } catch (err) {
+      console.error('Failed to push CRT settings:', err)
+      throw err
+    }
+  }, [token, localSettings])
+
+  const setGlobalEnabled = useCallback(async (enabled: boolean) => {
+    if (!token) return
+
+    try {
+      const newSettings = enabled ? { ...localSettings, enabled: true } : null
+
+      const response = await fetch('/api/auth/admin/crt-settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ settings: newSettings }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to update CRT enabled state')
+      }
+
+      // Update local state immediately for responsive UI
+      if (enabled) {
+        setLocalSettings(prev => ({ ...prev, enabled: true }))
+      }
+      setIsPreviewMode(false)
+    } catch (err) {
+      console.error('Failed to set CRT enabled:', err)
+      throw err
+    }
+  }, [token, localSettings])
+
+  const setPreviewMode = useCallback((enabled: boolean) => {
+    setIsPreviewMode(enabled)
   }, [])
 
   return (
-    <CRTContext.Provider value={{ settings, updateSettings, updateNestedSettings, resetToDefaults }}>
+    <CRTContext.Provider value={{
+      settings,
+      localSettings,
+      isPreviewMode,
+      isLoading,
+      updateLocalSettings,
+      updateNestedLocalSettings,
+      resetToDefaults,
+      pushToAllUsers,
+      setGlobalEnabled,
+      setPreviewMode,
+    }}>
       {children}
     </CRTContext.Provider>
   )

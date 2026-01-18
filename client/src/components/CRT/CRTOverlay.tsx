@@ -4,7 +4,8 @@ import '../../styles/crt.css'
 export default function CRTOverlay() {
   const { settings } = useCRT()
 
-  if (!settings.enabled) {
+  // If settings is null or disabled, don't render anything
+  if (!settings || !settings.enabled) {
     return null
   }
 

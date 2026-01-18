@@ -1,23 +1,81 @@
+import { useState } from 'react'
 import { useCRT } from '../../context/CRTContext'
 import '../../styles/crt.css'
 
 export default function CRTAdminPanel() {
-  const { settings, updateSettings, updateNestedSettings, resetToDefaults } = useCRT()
+  const {
+    settings,
+    localSettings,
+    isPreviewMode,
+    isLoading,
+    updateLocalSettings,
+    updateNestedLocalSettings,
+    resetToDefaults,
+    pushToAllUsers,
+    setGlobalEnabled,
+    setPreviewMode,
+  } = useCRT()
+
+  const [isPushing, setIsPushing] = useState(false)
+  const [isToggling, setIsToggling] = useState(false)
+
+  const isGloballyEnabled = settings !== null
+
+  const handleToggleGlobal = async () => {
+    setIsToggling(true)
+    try {
+      await setGlobalEnabled(!isGloballyEnabled)
+    } catch {
+      alert('Failed to update CRT status')
+    }
+    setIsToggling(false)
+  }
+
+  const handlePushToAll = async () => {
+    setIsPushing(true)
+    try {
+      await pushToAllUsers()
+    } catch {
+      alert('Failed to push settings')
+    }
+    setIsPushing(false)
+  }
+
+  if (isLoading) {
+    return <div className="crt-admin-panel">Loading...</div>
+  }
 
   return (
     <div className="crt-admin-panel">
-      {/* Master Toggle */}
-      <div className={`crt-master-toggle ${settings.enabled ? 'active' : ''}`}>
+      {/* Global Toggle */}
+      <div className={`crt-master-toggle ${isGloballyEnabled ? 'active' : ''}`}>
         <div className="crt-master-info">
-          <h3>CRT Effect</h3>
+          <h3>CRT Effect (Global)</h3>
           <span className="crt-master-status">
-            {settings.enabled ? 'Effects are active' : 'Effects are disabled'}
+            {isGloballyEnabled ? 'Enabled for all users' : 'Disabled for all users'}
           </span>
         </div>
-        <div
-          className={`crt-toggle ${settings.enabled ? 'active' : ''}`}
-          onClick={() => updateSettings({ enabled: !settings.enabled })}
-        />
+        <button
+          className={`btn ${isGloballyEnabled ? 'btn-danger' : 'btn-success'}`}
+          onClick={handleToggleGlobal}
+          disabled={isToggling}
+        >
+          {isToggling ? '...' : isGloballyEnabled ? 'Turn Off' : 'Turn On'}
+        </button>
+      </div>
+
+      {/* Preview Mode Toggle */}
+      <div className="crt-section">
+        <div className="crt-effect-row">
+          <div
+            className={`crt-toggle ${isPreviewMode ? 'active' : ''}`}
+            onClick={() => setPreviewMode(!isPreviewMode)}
+          />
+          <div className="crt-effect-info">
+            <div className="crt-effect-name">Preview Mode</div>
+            <div className="crt-effect-desc">See changes before pushing to all users</div>
+          </div>
+        </div>
       </div>
 
       {/* Scanlines */}
@@ -25,8 +83,8 @@ export default function CRTAdminPanel() {
         <h3>Scanlines</h3>
         <div className="crt-effect-row">
           <div
-            className={`crt-toggle ${settings.scanlines.enabled ? 'active' : ''}`}
-            onClick={() => updateNestedSettings('scanlines', { enabled: !settings.scanlines.enabled })}
+            className={`crt-toggle ${localSettings.scanlines.enabled ? 'active' : ''}`}
+            onClick={() => updateNestedLocalSettings('scanlines', { enabled: !localSettings.scanlines.enabled })}
           />
           <div className="crt-effect-info">
             <div className="crt-effect-name">Enable Scanlines</div>
@@ -41,11 +99,11 @@ export default function CRTAdminPanel() {
                 min="0"
                 max="0.5"
                 step="0.01"
-                value={settings.scanlines.intensity}
-                onChange={(e) => updateNestedSettings('scanlines', { intensity: parseFloat(e.target.value) })}
-                disabled={!settings.scanlines.enabled}
+                value={localSettings.scanlines.intensity}
+                onChange={(e) => updateNestedLocalSettings('scanlines', { intensity: parseFloat(e.target.value) })}
+                disabled={!localSettings.scanlines.enabled}
               />
-              <span className="crt-slider-value">{Math.round(settings.scanlines.intensity * 100)}%</span>
+              <span className="crt-slider-value">{Math.round(localSettings.scanlines.intensity * 100)}%</span>
             </div>
             <div className="crt-slider-group">
               <span className="crt-slider-label">Spacing</span>
@@ -55,11 +113,11 @@ export default function CRTAdminPanel() {
                 min="1"
                 max="6"
                 step="1"
-                value={settings.scanlines.spacing}
-                onChange={(e) => updateNestedSettings('scanlines', { spacing: parseInt(e.target.value) })}
-                disabled={!settings.scanlines.enabled}
+                value={localSettings.scanlines.spacing}
+                onChange={(e) => updateNestedLocalSettings('scanlines', { spacing: parseInt(e.target.value) })}
+                disabled={!localSettings.scanlines.enabled}
               />
-              <span className="crt-slider-value">{settings.scanlines.spacing}px</span>
+              <span className="crt-slider-value">{localSettings.scanlines.spacing}px</span>
             </div>
           </div>
         </div>
@@ -70,8 +128,8 @@ export default function CRTAdminPanel() {
         <h3>Screen Glow</h3>
         <div className="crt-effect-row">
           <div
-            className={`crt-toggle ${settings.glow.enabled ? 'active' : ''}`}
-            onClick={() => updateNestedSettings('glow', { enabled: !settings.glow.enabled })}
+            className={`crt-toggle ${localSettings.glow.enabled ? 'active' : ''}`}
+            onClick={() => updateNestedLocalSettings('glow', { enabled: !localSettings.glow.enabled })}
           />
           <div className="crt-effect-info">
             <div className="crt-effect-name">Enable Glow</div>
@@ -86,18 +144,18 @@ export default function CRTAdminPanel() {
                 min="0"
                 max="1"
                 step="0.05"
-                value={settings.glow.intensity}
-                onChange={(e) => updateNestedSettings('glow', { intensity: parseFloat(e.target.value) })}
-                disabled={!settings.glow.enabled}
+                value={localSettings.glow.intensity}
+                onChange={(e) => updateNestedLocalSettings('glow', { intensity: parseFloat(e.target.value) })}
+                disabled={!localSettings.glow.enabled}
               />
-              <span className="crt-slider-value">{Math.round(settings.glow.intensity * 100)}%</span>
+              <span className="crt-slider-value">{Math.round(localSettings.glow.intensity * 100)}%</span>
             </div>
             <input
               type="color"
               className="crt-color-picker"
-              value={settings.glow.color}
-              onChange={(e) => updateNestedSettings('glow', { color: e.target.value })}
-              disabled={!settings.glow.enabled}
+              value={localSettings.glow.color}
+              onChange={(e) => updateNestedLocalSettings('glow', { color: e.target.value })}
+              disabled={!localSettings.glow.enabled}
             />
           </div>
         </div>
@@ -108,8 +166,8 @@ export default function CRTAdminPanel() {
         <h3>Vignette</h3>
         <div className="crt-effect-row">
           <div
-            className={`crt-toggle ${settings.vignette.enabled ? 'active' : ''}`}
-            onClick={() => updateNestedSettings('vignette', { enabled: !settings.vignette.enabled })}
+            className={`crt-toggle ${localSettings.vignette.enabled ? 'active' : ''}`}
+            onClick={() => updateNestedLocalSettings('vignette', { enabled: !localSettings.vignette.enabled })}
           />
           <div className="crt-effect-info">
             <div className="crt-effect-name">Enable Vignette</div>
@@ -124,11 +182,11 @@ export default function CRTAdminPanel() {
                 min="0"
                 max="1"
                 step="0.05"
-                value={settings.vignette.intensity}
-                onChange={(e) => updateNestedSettings('vignette', { intensity: parseFloat(e.target.value) })}
-                disabled={!settings.vignette.enabled}
+                value={localSettings.vignette.intensity}
+                onChange={(e) => updateNestedLocalSettings('vignette', { intensity: parseFloat(e.target.value) })}
+                disabled={!localSettings.vignette.enabled}
               />
-              <span className="crt-slider-value">{Math.round(settings.vignette.intensity * 100)}%</span>
+              <span className="crt-slider-value">{Math.round(localSettings.vignette.intensity * 100)}%</span>
             </div>
           </div>
         </div>
@@ -139,8 +197,8 @@ export default function CRTAdminPanel() {
         <h3>Static Noise</h3>
         <div className="crt-effect-row">
           <div
-            className={`crt-toggle ${settings.noise.enabled ? 'active' : ''}`}
-            onClick={() => updateNestedSettings('noise', { enabled: !settings.noise.enabled })}
+            className={`crt-toggle ${localSettings.noise.enabled ? 'active' : ''}`}
+            onClick={() => updateNestedLocalSettings('noise', { enabled: !localSettings.noise.enabled })}
           />
           <div className="crt-effect-info">
             <div className="crt-effect-name">Enable Noise</div>
@@ -155,18 +213,18 @@ export default function CRTAdminPanel() {
                 min="0"
                 max="0.3"
                 step="0.01"
-                value={settings.noise.intensity}
-                onChange={(e) => updateNestedSettings('noise', { intensity: parseFloat(e.target.value) })}
-                disabled={!settings.noise.enabled}
+                value={localSettings.noise.intensity}
+                onChange={(e) => updateNestedLocalSettings('noise', { intensity: parseFloat(e.target.value) })}
+                disabled={!localSettings.noise.enabled}
               />
-              <span className="crt-slider-value">{Math.round(settings.noise.intensity * 100)}%</span>
+              <span className="crt-slider-value">{Math.round(localSettings.noise.intensity * 100)}%</span>
             </div>
             <label className="crt-checkbox-label">
               <input
                 type="checkbox"
-                checked={settings.noise.animated}
-                onChange={(e) => updateNestedSettings('noise', { animated: e.target.checked })}
-                disabled={!settings.noise.enabled}
+                checked={localSettings.noise.animated}
+                onChange={(e) => updateNestedLocalSettings('noise', { animated: e.target.checked })}
+                disabled={!localSettings.noise.enabled}
               />
               Animate
             </label>
@@ -179,8 +237,8 @@ export default function CRTAdminPanel() {
         <h3>Screen Curvature</h3>
         <div className="crt-effect-row">
           <div
-            className={`crt-toggle ${settings.curvature.enabled ? 'active' : ''}`}
-            onClick={() => updateNestedSettings('curvature', { enabled: !settings.curvature.enabled })}
+            className={`crt-toggle ${localSettings.curvature.enabled ? 'active' : ''}`}
+            onClick={() => updateNestedLocalSettings('curvature', { enabled: !localSettings.curvature.enabled })}
           />
           <div className="crt-effect-info">
             <div className="crt-effect-name">Enable Curvature</div>
@@ -195,11 +253,11 @@ export default function CRTAdminPanel() {
                 min="0"
                 max="0.1"
                 step="0.005"
-                value={settings.curvature.intensity}
-                onChange={(e) => updateNestedSettings('curvature', { intensity: parseFloat(e.target.value) })}
-                disabled={!settings.curvature.enabled}
+                value={localSettings.curvature.intensity}
+                onChange={(e) => updateNestedLocalSettings('curvature', { intensity: parseFloat(e.target.value) })}
+                disabled={!localSettings.curvature.enabled}
               />
-              <span className="crt-slider-value">{Math.round(settings.curvature.intensity * 1000)}%</span>
+              <span className="crt-slider-value">{Math.round(localSettings.curvature.intensity * 1000)}%</span>
             </div>
           </div>
         </div>
@@ -210,8 +268,8 @@ export default function CRTAdminPanel() {
         <h3>Chromatic Aberration</h3>
         <div className="crt-effect-row">
           <div
-            className={`crt-toggle ${settings.chromaticAberration.enabled ? 'active' : ''}`}
-            onClick={() => updateNestedSettings('chromaticAberration', { enabled: !settings.chromaticAberration.enabled })}
+            className={`crt-toggle ${localSettings.chromaticAberration.enabled ? 'active' : ''}`}
+            onClick={() => updateNestedLocalSettings('chromaticAberration', { enabled: !localSettings.chromaticAberration.enabled })}
           />
           <div className="crt-effect-info">
             <div className="crt-effect-name">Enable Aberration</div>
@@ -226,11 +284,11 @@ export default function CRTAdminPanel() {
                 min="0"
                 max="2"
                 step="0.1"
-                value={settings.chromaticAberration.intensity}
-                onChange={(e) => updateNestedSettings('chromaticAberration', { intensity: parseFloat(e.target.value) })}
-                disabled={!settings.chromaticAberration.enabled}
+                value={localSettings.chromaticAberration.intensity}
+                onChange={(e) => updateNestedLocalSettings('chromaticAberration', { intensity: parseFloat(e.target.value) })}
+                disabled={!localSettings.chromaticAberration.enabled}
               />
-              <span className="crt-slider-value">{Math.round(settings.chromaticAberration.intensity * 50)}%</span>
+              <span className="crt-slider-value">{Math.round(localSettings.chromaticAberration.intensity * 50)}%</span>
             </div>
           </div>
         </div>
@@ -243,7 +301,7 @@ export default function CRTAdminPanel() {
           <div className="crt-adjustment-item">
             <div className="crt-adjustment-label">
               <span>Brightness</span>
-              <span>{Math.round(settings.brightness * 100)}%</span>
+              <span>{Math.round(localSettings.brightness * 100)}%</span>
             </div>
             <input
               type="range"
@@ -251,14 +309,14 @@ export default function CRTAdminPanel() {
               min="0.5"
               max="1.5"
               step="0.05"
-              value={settings.brightness}
-              onChange={(e) => updateSettings({ brightness: parseFloat(e.target.value) })}
+              value={localSettings.brightness}
+              onChange={(e) => updateLocalSettings({ brightness: parseFloat(e.target.value) })}
             />
           </div>
           <div className="crt-adjustment-item">
             <div className="crt-adjustment-label">
               <span>Contrast</span>
-              <span>{Math.round(settings.contrast * 100)}%</span>
+              <span>{Math.round(localSettings.contrast * 100)}%</span>
             </div>
             <input
               type="range"
@@ -266,14 +324,14 @@ export default function CRTAdminPanel() {
               min="0.5"
               max="1.5"
               step="0.05"
-              value={settings.contrast}
-              onChange={(e) => updateSettings({ contrast: parseFloat(e.target.value) })}
+              value={localSettings.contrast}
+              onChange={(e) => updateLocalSettings({ contrast: parseFloat(e.target.value) })}
             />
           </div>
           <div className="crt-adjustment-item">
             <div className="crt-adjustment-label">
               <span>Saturation</span>
-              <span>{Math.round(settings.saturation * 100)}%</span>
+              <span>{Math.round(localSettings.saturation * 100)}%</span>
             </div>
             <input
               type="range"
@@ -281,17 +339,26 @@ export default function CRTAdminPanel() {
               min="0"
               max="2"
               step="0.05"
-              value={settings.saturation}
-              onChange={(e) => updateSettings({ saturation: parseFloat(e.target.value) })}
+              value={localSettings.saturation}
+              onChange={(e) => updateLocalSettings({ saturation: parseFloat(e.target.value) })}
             />
           </div>
         </div>
       </div>
 
-      {/* Reset Button */}
-      <button className="crt-reset-btn" onClick={resetToDefaults}>
-        Restore Defaults
-      </button>
+      {/* Action Buttons */}
+      <div className="crt-actions">
+        <button
+          className="btn btn-primary"
+          onClick={handlePushToAll}
+          disabled={isPushing}
+        >
+          {isPushing ? 'Pushing...' : 'Push to All Users'}
+        </button>
+        <button className="crt-reset-btn" onClick={resetToDefaults}>
+          Restore Defaults
+        </button>
+      </div>
     </div>
   )
 }

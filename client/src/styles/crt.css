@@ -336,6 +336,23 @@
   justify-content: space-between;
 }
 
+/* Action buttons section */
+.crt-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color);
+}
+
+.crt-actions .btn-primary {
+  flex: 1;
+}
+
+.crt-actions .crt-reset-btn {
+  margin-top: 0;
+}
+
 @media (max-width: 768px) {
   .crt-effect-row {
     flex-wrap: wrap;

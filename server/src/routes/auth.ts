@@ -7,7 +7,7 @@ import fs from 'fs'
 import { fileURLToPath } from 'url'
 import { query, queryOne, execute, User, AuditLog, WordFilter, Message, GameSession, AvatarChange } from '../db/schema.js'
 import { authenticateToken, generateToken } from '../middleware/auth.js'
-import { broadcastChatStatus, broadcastAvatarChange, broadcastUsernameChange, broadcastChatClear, broadcastAnnouncement, broadcastMaintenanceMode, broadcastRegistrationStatus, getMessageRateLimit, setMessageRateLimit, getGuestChatEnabled, setGuestChatEnabled, reloadWordFilter, broadcastMessageDelete, broadcastAvatarImageChange, getConnectedUsersDetailed } from '../socket/chat.js'
+import { broadcastChatStatus, broadcastAvatarChange, broadcastUsernameChange, broadcastChatClear, broadcastAnnouncement, broadcastMaintenanceMode, broadcastRegistrationStatus, broadcastCRTSettings, getMessageRateLimit, setMessageRateLimit, getGuestChatEnabled, setGuestChatEnabled, reloadWordFilter, broadcastMessageDelete, broadcastAvatarImageChange, getConnectedUsersDetailed } from '../socket/chat.js'
 import { generateVerificationCode, sendVerificationEmail } from '../utils/email.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -1040,6 +1040,82 @@ router.get('/maintenance', async (_req, res) => {
     })
   } catch (error) {
     console.error('Get maintenance error:', error)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+// Admin: Set CRT display settings
+router.post('/admin/crt-settings', authenticateToken, async (req, res) => {
+  try {
+    const adminId = req.user!.userId
+    const { settings } = req.body
+
+    const admin = await queryOne<User>('SELECT is_admin FROM users WHERE id = $1', [adminId])
+    if (!admin || admin.is_admin !== 1) {
+      res.status(403).json({ message: 'Admin access required' })
+      return
+    }
+
+    await execute(
+      `INSERT INTO settings (key, value, updated_at)
+       VALUES ('crt_settings', $1, CURRENT_TIMESTAMP)
+       ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = CURRENT_TIMESTAMP`,
+      [JSON.stringify(settings)]
+    )
+
+    // Broadcast to all clients
+    broadcastCRTSettings(settings)
+
+    res.json({ message: 'CRT settings updated', settings })
+  } catch (error) {
+    console.error('Admin CRT settings error:', error)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+// Admin: Get CRT display settings
+router.get('/admin/crt-settings', authenticateToken, async (req, res) => {
+  try {
+    const adminId = req.user!.userId
+
+    const admin = await queryOne<User>('SELECT is_admin FROM users WHERE id = $1', [adminId])
+    if (!admin || admin.is_admin !== 1) {
+      res.status(403).json({ message: 'Admin access required' })
+      return
+    }
+
+    const result = await queryOne<{ value: string }>(
+      'SELECT value FROM settings WHERE key = $1',
+      ['crt_settings']
+    )
+
+    if (result?.value) {
+      res.json(JSON.parse(result.value))
+    } else {
+      res.json(null)
+    }
+  } catch (error) {
+    console.error('Admin get CRT settings error:', error)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+// Public: Get CRT display settings
+router.get('/crt-settings', async (_req, res) => {
+  try {
+    const result = await queryOne<{ value: string }>(
+      'SELECT value FROM settings WHERE key = $1',
+      ['crt_settings']
+    )
+
+    if (result?.value) {
+      res.json(JSON.parse(result.value))
+    } else {
+      // Return null if no settings configured (effects disabled by default)
+      res.json(null)
+    }
+  } catch (error) {
+    console.error('Get CRT settings error:', error)
     res.status(500).json({ message: 'Server error' })
   }
 })

@@ -180,6 +180,13 @@ export function broadcastRegistrationStatus(paused: boolean) {
   }
 }
 
+// Broadcast CRT settings change to all clients
+export function broadcastCRTSettings(settings: object) {
+  if (ioInstance) {
+    ioInstance.emit('site:crtSettings', settings)
+  }
+}
+
 // Broadcast new high score to chat
 export function broadcastHighScore(username: string, gameName: string, score: number) {
   if (ioInstance) {

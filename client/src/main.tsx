@@ -10,13 +10,13 @@ import './styles/retro.css'
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <BrowserRouter>
-      <CRTProvider>
-        <AuthProvider>
-          <SocketProvider>
+      <AuthProvider>
+        <SocketProvider>
+          <CRTProvider>
             <App />
-          </SocketProvider>
-        </AuthProvider>
-      </CRTProvider>
+          </CRTProvider>
+        </SocketProvider>
+      </AuthProvider>
     </BrowserRouter>
   </React.StrictMode>,
 )
