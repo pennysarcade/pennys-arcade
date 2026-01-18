@@ -1976,6 +1976,10 @@ function update(dt) {
 function draw() {
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Only draw game elements when running
+  if (!gameRunning) return;
+
   ctx.save();
   ctx.translate(screenShake.x, screenShake.y);
 
