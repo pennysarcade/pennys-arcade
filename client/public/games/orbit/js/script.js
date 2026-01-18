@@ -3,10 +3,10 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-// === MULTIPLAYER MODE DETECTION ===
+// === MULTIPLAYER (ALWAYS ON) ===
 const urlParams = new URLSearchParams(window.location.search);
-const MULTIPLAYER_MODE = urlParams.get('mode') === 'multiplayer';
-const AI_DISABLED_IN_MP = MULTIPLAYER_MODE; // Disable AI in multiplayer
+const isMobile = urlParams.get('mobile') === 'true';
+const MULTIPLAYER_MODE = true; // Always multiplayer - no single-player mode
 
 // Multiplayer state
 let mpPlayerId = null;
@@ -79,9 +79,9 @@ let specialBallForceCapture = false; // Once true, ball is being forcibly captur
 let activePowerups = []; // { type, endTime }
 
 // ============================================================================
-// AI PLAYERS SYSTEM - Remove this section to disable AI players
+// AI PLAYERS SYSTEM - DISABLED (multiplayer only)
 // ============================================================================
-const AI_ENABLED = !AI_DISABLED_IN_MP; // Disabled in multiplayer mode
+const AI_ENABLED = false; // Always disabled - multiplayer only
 
 // AI Player configurations
 const AI_PLAYERS = [
@@ -3056,15 +3056,16 @@ if (ringSwitchBtn) {
   };
 }
 
-// === MULTIPLAYER INTEGRATION ===
+// === MULTIPLAYER INTEGRATION (ALWAYS ON) ===
 
-// Initialize multiplayer if in multiplayer mode
-if (MULTIPLAYER_MODE) {
-  initMultiplayer();
-}
+// Initialize multiplayer immediately on load
+initMultiplayer();
 
 async function initMultiplayer() {
-  console.log('[ORBIT] Initializing multiplayer mode...');
+  console.log('[ORBIT] Connecting to multiplayer server...');
+
+  // Hide welcome screen immediately - no start button needed
+  welcomeScreen.classList.add('hidden');
 
   // Load multiplayer.js if not already loaded
   if (typeof OrbitMultiplayer === 'undefined') {
@@ -3076,11 +3077,6 @@ async function initMultiplayer() {
       document.head.appendChild(script);
     });
   }
-
-  // Update UI for multiplayer mode
-  welcomeScreen.querySelector('h1').textContent = 'ORBIT MULTIPLAYER';
-  welcomeScreen.querySelector('p').textContent = 'Keep the red ball inside - together!';
-  welcomeScreen.querySelector('.controls').textContent = 'WASD or drag to move | Space to switch rings';
 
   // Connect to server
   OrbitMultiplayer.connect({
@@ -3144,9 +3140,10 @@ function handleMPStateUpdate(state) {
   }
 
   // Update balls from server (for rendering)
+  // Server sends positions relative to center, add our centerX/centerY
   balls = state.balls.filter(b => !b.isSpecial).map(b => ({
-    x: b.x,
-    y: b.y,
+    x: centerX + b.x,  // Add local center
+    y: centerY + b.y,  // Add local center
     vx: b.vx,
     vy: b.vy,
     baseRadius: b.radius,
@@ -3162,8 +3159,8 @@ function handleMPStateUpdate(state) {
   const serverSpecialBall = state.balls.find(b => b.isSpecial);
   if (serverSpecialBall) {
     specialBall = {
-      x: serverSpecialBall.x,
-      y: serverSpecialBall.y,
+      x: centerX + serverSpecialBall.x,  // Add local center
+      y: centerY + serverSpecialBall.y,  // Add local center
       vx: serverSpecialBall.vx,
       vy: serverSpecialBall.vy,
       baseRadius: serverSpecialBall.radius,
@@ -3185,8 +3182,8 @@ function handleMPStateUpdate(state) {
 
   // Update powerups
   powerups = state.powerups.map(p => ({
-    x: p.x,
-    y: p.y,
+    x: centerX + p.x,  // Add local center
+    y: centerY + p.y,  // Add local center
     vx: 0,
     vy: 0,
     type: p.type,
@@ -3245,11 +3242,13 @@ function handleMPRoundEnd(data) {
 }
 
 function handleMPBallHit(data) {
-  // Spawn visual effects at hit location
-  if (data.x && data.y) {
+  // Spawn visual effects at hit location (server sends relative coords)
+  if (data.x !== undefined && data.y !== undefined) {
+    const hitX = centerX + data.x;  // Translate to local coords
+    const hitY = centerY + data.y;
     const color = data.isSpecial ? '#ff0000' : '#fff';
-    spawnParticles(data.x, data.y, 10, color, 150, 4, 0.3);
-    spawnScorePopup(data.x, data.y, data.points, color);
+    spawnParticles(hitX, hitY, 10, color, 150, 4, 0.3);
+    spawnScorePopup(hitX, hitY, data.points, color);
   }
 
   if (data.playerId === mpPlayerId) {

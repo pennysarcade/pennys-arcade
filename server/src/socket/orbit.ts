@@ -686,14 +686,14 @@ function updateBalls(dt: number): void {
         // Cooldown
         ball.hitCooldown = 0.1
 
-        // Broadcast hit event
+        // Broadcast hit event (relative to center)
         ioInstance?.to('orbit').emit('orbit:ball_hit', {
           playerId: player.id,
           ballId: ball.id,
           points,
           combo: player.combo,
-          x: ball.x,
-          y: ball.y
+          x: ball.x - gameState.centerX,
+          y: ball.y - gameState.centerY
         })
       }
     }
@@ -906,10 +906,12 @@ function broadcastStateUpdate(): void {
     }
   }
 
+  // Send positions relative to center (offset from center)
+  // Client will add its own centerX/centerY when rendering
   const balls: StateUpdate['balls'] = gameState.balls.map(ball => ({
     id: ball.id,
-    x: ball.x,
-    y: ball.y,
+    x: ball.x - gameState.centerX,  // Relative to center
+    y: ball.y - gameState.centerY,  // Relative to center
     vx: ball.vx,
     vy: ball.vy,
     radius: ball.baseRadius * ball.spawnProgress,
@@ -922,8 +924,8 @@ function broadcastStateUpdate(): void {
   if (gameState.specialBall) {
     balls.push({
       id: gameState.specialBall.id,
-      x: gameState.specialBall.x,
-      y: gameState.specialBall.y,
+      x: gameState.specialBall.x - gameState.centerX,  // Relative to center
+      y: gameState.specialBall.y - gameState.centerY,  // Relative to center
       vx: gameState.specialBall.vx,
       vy: gameState.specialBall.vy,
       radius: gameState.specialBall.baseRadius * gameState.specialBall.spawnProgress,
@@ -935,8 +937,8 @@ function broadcastStateUpdate(): void {
 
   const powerups: StateUpdate['powerups'] = gameState.powerups.map(p => ({
     id: p.id,
-    x: p.x,
-    y: p.y,
+    x: p.x - gameState.centerX,  // Relative to center
+    y: p.y - gameState.centerY,  // Relative to center
     type: p.type,
     spawnProgress: p.spawnProgress
   }))
