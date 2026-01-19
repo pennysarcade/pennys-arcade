@@ -15,6 +15,8 @@ export interface GameConfig {
   multiplayer?: boolean // has real-time multiplayer lobby
   maxPlayers?: number // for multiplayer games
   hidden?: boolean // hidden from game list but still accessible via direct URL
+  // TODO: Remove this flag when Orbit exits beta and has proper high score tracking
+  disableTickerMessages?: boolean // suppress session/score ticker messages for beta games
 }
 
 export const GAMES: GameConfig[] = [
@@ -39,6 +41,7 @@ export const GAMES: GameConfig[] = [
     title: 'Orbit (Beta)',
     description: 'Keep the balls in the ring!',
     platforms: 'both',
+    disableTickerMessages: true, // Beta - no high scores yet
   },
   { id: '04', title: 'Game 04', description: 'Under construction...' },
   { id: '05', title: 'Game 05', description: 'Under construction...' },

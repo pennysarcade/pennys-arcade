@@ -2,23 +2,27 @@ import { Link } from 'react-router-dom'
 import { GAMES, type GameConfig } from '../../components/Games/ArcadeGrid'
 import { useAuth } from '../../context/AuthContext'
 
+// Games that have playable paths (even without banners)
+const PLAYABLE_GAMES = ['tessles', 'onzac', 'orbit']
+
 export default function MobileGameRow() {
   const { user } = useAuth()
 
   const isGuest = user?.isGuest ?? true
 
-  // Filter out desktop-only and hidden games, then sort: active games (with banners) first
+  // Filter out desktop-only and hidden games, then sort: active games first
   const mobileGames = GAMES.filter((game) => game.platforms !== 'desktop' && !game.hidden)
   const sortedGames = [...mobileGames].sort((a, b) => {
-    const aActive = !!a.banner
-    const bActive = !!b.banner
+    const aActive = !!a.banner || PLAYABLE_GAMES.includes(a.id)
+    const bActive = !!b.banner || PLAYABLE_GAMES.includes(b.id)
     if (aActive && !bActive) return -1
     if (!aActive && bActive) return 1
     return 0
   })
 
   const getGameState = (game: GameConfig) => {
-    const isPlaceholder = !game.banner
+    const isPlayable = !!game.banner || PLAYABLE_GAMES.includes(game.id)
+    const isPlaceholder = !isPlayable
     const requiresAuthButGuest = game.requiresAuth && isGuest
 
     let disabled = false

@@ -22,11 +22,11 @@ const infoBtn = document.getElementById('info-btn');
 const infoPanel = document.getElementById('info-panel');
 const infoCloseBtn = document.getElementById('info-close-btn');
 
-// Game constants
-const ARENA_RADIUS_RATIO = 0.35;
+// Game constants - adjusted for mobile
+const ARENA_RADIUS_RATIO = isMobile ? 0.40 : 0.35; // Larger arena on mobile
 const INNER_RING_RATIO = 0.82;
-const PADDLE_ARC_BASE = 0.20;
-const PADDLE_THICKNESS = 18;
+const PADDLE_ARC_BASE = isMobile ? 0.28 : 0.20; // Longer paddles on mobile
+const PADDLE_THICKNESS = isMobile ? 20 : 18;
 const PADDLE_SPEED = 4;
 const PADDLE_ACCELERATION = 5;
 const PADDLE_DECELERATION = 12;
@@ -973,7 +973,10 @@ function getAngularDistance(angle1, angle2, arc1, arc2) {
 
 // Check if two paddles are close enough to interact (same ring zone)
 function arePaddlesInSameZone(radius1, radius2) {
-  return Math.abs(radius1 - radius2) < 40; // Within 40px radially
+  // Use half the ring gap as the threshold - paddles must be truly on the same ring
+  const ringGap = arenaRadius - innerRadius;
+  const threshold = ringGap * 0.4; // 40% of gap allows some overlap during transitions
+  return Math.abs(radius1 - radius2) < threshold;
 }
 
 // Calculate repulsion force based on distance (inverse square-ish with soft cap)

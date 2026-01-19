@@ -46,7 +46,7 @@ interface HighScoreData {
 export default function Game() {
   const { id } = useParams<{ id: string }>()
   const { user, token } = useAuth()
-  const { socket, addTickerMessage, tickerMessages } = useSocket()
+  const { socket, addTickerMessage: rawAddTickerMessage, tickerMessages } = useSocket()
   const [sessionId, setSessionId] = useState<number | null>(null)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [_sessionStatus, setSessionStatus] = useState<'idle' | 'starting' | 'playing' | 'ending' | 'error'>('idle')
@@ -58,6 +58,16 @@ export default function Game() {
   const [highScoreData, setHighScoreData] = useState<HighScoreData | null>(null)
 
   const game = id ? GAME_CONFIGS[id] : null
+
+  // Check if ticker messages are disabled for this game (e.g., beta games)
+  const gameData = GAMES.find(g => g.id === id)
+  const tickerDisabled = gameData?.disableTickerMessages ?? false
+
+  // Wrapper that respects the disableTickerMessages flag
+  const addTickerMessage = useCallback((message: string, level?: string, priority?: string) => {
+    if (tickerDisabled) return
+    rawAddTickerMessage(message, level, priority)
+  }, [tickerDisabled, rawAddTickerMessage])
 
   // Start a game session when the game loads
   const startSession = useCallback(async (gameId: string) => {
@@ -372,7 +382,6 @@ export default function Game() {
   const isPlayable = !!game.path
 
   // Check if game is multiplayer and build appropriate URL
-  const gameData = GAMES.find(g => g.id === id)
   const isMultiplayer = gameData?.multiplayer
   const gameSrc = game.path ? (isMultiplayer ? `${game.path}?mode=multiplayer` : game.path) : ''
 
