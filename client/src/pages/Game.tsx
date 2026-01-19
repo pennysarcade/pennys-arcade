@@ -21,6 +21,11 @@ const GAME_CONFIGS: Record<string, GameConfig> = {
     description: 'Oh no, zombies are coming!',
     path: '/games/onzac/index.html'
   },
+  'orbit': {
+    title: 'Orbit (Beta)',
+    description: 'Keep the balls in the ring!',
+    path: '/games/orbit/index.html'
+  },
 }
 
 // Add other games from GAMES array

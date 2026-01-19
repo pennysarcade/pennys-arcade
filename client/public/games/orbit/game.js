@@ -1,12 +1,15 @@
-// === ORBIT SOLO - Single Player with AI Opponents ===
-// A circular pong game with one human-controlled paddle and three AI opponents
+// === ORBIT - Single Player Version ===
+// A circular pong game with one human-controlled paddle
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-// Check for mobile
+// Check for mobile - multiple detection methods for reliability
 const urlParams = new URLSearchParams(window.location.search);
-const isMobile = urlParams.get('mobile') === 'true' || /Mobi|Android/i.test(navigator.userAgent);
+const isMobile = urlParams.get('mobile') === 'true' ||
+  /Mobi|Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+  ('ontouchstart' in window) ||
+  (navigator.maxTouchPoints > 0);
 
 // DOM elements
 const scoreDisplay = document.getElementById('score');
@@ -18,25 +21,19 @@ const ringSwitchBtn = document.getElementById('ring-switch-btn');
 const infoBtn = document.getElementById('info-btn');
 const infoPanel = document.getElementById('info-panel');
 const infoCloseBtn = document.getElementById('info-close-btn');
-const startScreen = document.getElementById('start-screen');
-const startBtn = document.getElementById('start-btn');
-const leaderboardEntries = document.getElementById('leaderboard-entries');
-
-// Player stats
-let playerSaves = 0;
 
 // Game constants
 const ARENA_RADIUS_RATIO = 0.35;
 const INNER_RING_RATIO = 0.82;
-const PADDLE_ARC_BASE = 0.18;
-const PADDLE_THICKNESS = 16;
+const PADDLE_ARC_BASE = 0.20;
+const PADDLE_THICKNESS = 18;
 const PADDLE_SPEED = 4;
 const PADDLE_ACCELERATION = 5;
 const PADDLE_DECELERATION = 12;
 const RING_SWITCH_DURATION = 0.25;
 const BALL_RADIUS = 8;
 const BALL_SPEED = 150;
-const SPAWN_INTERVAL = 2500;
+const SPAWN_INTERVAL = 2000;
 
 // Game state
 let arenaRadius;
@@ -48,6 +45,45 @@ let paddleArc = PADDLE_ARC_BASE;
 let targetPaddleArc = PADDLE_ARC_BASE;
 let paddleVelocity = 0;
 
+// Player scores
+let playerScore = 0;
+
+// AI Opponents
+const AI_PADDLES = [
+  {
+    name: 'CHILL',
+    color: '#88ff88',
+    angle: Math.PI / 6,  // 30 degrees
+    velocity: 0,
+    ring: 0,
+    ringSwitchProgress: 0,
+    ringSwitchFrom: 0,
+    ringSwitchTo: 0,
+    score: 0,
+    // Chill AI: slower reactions, doesn't chase everything
+    reactionSpeed: 1.5,
+    maxSpeed: 2.5,
+    chaseThreshold: 0.6,  // Only chases balls within 60% of arena radius
+    laziness: 0.3  // 30% chance to not react
+  },
+  {
+    name: 'GREED',
+    color: '#ff8888',
+    angle: Math.PI - Math.PI / 6,  // 150 degrees
+    velocity: 0,
+    ring: 0,
+    ringSwitchProgress: 0,
+    ringSwitchFrom: 0,
+    ringSwitchTo: 0,
+    score: 0,
+    // Aggressive AI: fast reactions, chases everything
+    reactionSpeed: 4,
+    maxSpeed: 5,
+    chaseThreshold: 1.0,  // Chases all balls
+    laziness: 0  // Never lazy
+  }
+];
+
 // Dual ring system
 let paddleRing = 0;
 let ringSwitchProgress = 0;
@@ -58,12 +94,10 @@ let balls = [];
 let powerups = [];
 let score = 0;
 let highScore = 0;
-let highScoreHolder = '';
 let gameRunning = false;
 let lastTime = 0;
 let spawnTimer = 0;
 let gameTime = 0;
-let lastScoreUpdateTime = 0;
 
 // Special ball state
 let specialBall = null;
@@ -78,7 +112,7 @@ let specialBallForceCapture = false;
 let activePowerups = [];
 
 // Constants for special ball
-const SPECIAL_BALL_SPAWN_INTERVAL = 35;
+const SPECIAL_BALL_SPAWN_INTERVAL = 30;
 const SPECIAL_BALL_ACTIVE_DURATION = 15;
 const SPECIAL_BALL_RADIUS = 12;
 const SPECIAL_BALL_RETURN_DISTANCE = 50;
@@ -89,7 +123,7 @@ const BALL_MATURITY_TIME = 12;
 const BALL_AGE_BONUS_MAX = 40;
 
 // Power-ups
-const POWERUP_SPAWN_CHANCE = 0.12;
+const POWERUP_SPAWN_CHANCE = 0.15;
 const POWERUP_RADIUS = 10;
 const POWERUP_TYPES = {
   GROW: { color: '#00ff00', duration: 10, arcBonus: 0.10, negative: false },
@@ -123,325 +157,6 @@ const TRANSFER_HIT_BONUS = 20;
 const TRANSFER_SPIN = 2.5;
 const TRANSFER_SPEED_BOOST = 1.6;
 const SPIN_DECAY_RATE = 0.25;
-
-// === AI PLAYERS ===
-const AI_PLAYERS = [
-  {
-    name: 'Steady',
-    color: '#00ff88',
-    baseAngle: Math.PI / 2,     // Bottom
-    personality: 'defensive',   // Consistent, reliable
-    reactionTime: 0.15,         // Delay before reacting
-    accuracy: 0.92,             // How accurately they track
-    riskTolerance: 0.2,         // Chance to make risky plays
-    speed: 3.5,
-  },
-  {
-    name: 'Hotshot',
-    color: '#ff4488',
-    baseAngle: Math.PI,          // Left
-    personality: 'aggressive',   // Fast reactions, takes risks
-    reactionTime: 0.08,
-    accuracy: 0.85,
-    riskTolerance: 0.6,
-    speed: 5,
-  },
-  {
-    name: 'Chaos',
-    color: '#ffaa00',
-    baseAngle: 0,                // Right
-    personality: 'unpredictable', // Random behavior
-    reactionTime: 0.2,
-    accuracy: 0.75,
-    riskTolerance: 0.8,
-    speed: 4,
-  }
-];
-
-let aiPaddles = [];
-
-class AIPaddle {
-  constructor(config, index) {
-    this.name = config.name;
-    this.color = config.color;
-    this.baseAngle = config.baseAngle;
-    this.angle = config.baseAngle;
-    this.targetAngle = config.baseAngle;
-    this.personality = config.personality;
-    this.reactionTime = config.reactionTime;
-    this.accuracy = config.accuracy;
-    this.riskTolerance = config.riskTolerance;
-    this.maxSpeed = config.speed;
-    this.velocity = 0;
-    this.arc = PADDLE_ARC_BASE;
-    this.ring = 0;
-    this.ringSwitchProgress = 0;
-    this.ringSwitchFrom = 0;
-    this.ringSwitchTo = 0;
-    this.index = index;
-    this.lastDecisionTime = 0;
-    this.currentTarget = null;
-    this.saves = 0;
-    this.misses = 0;
-    this.streakSaves = 0;
-    this.bestStreak = 0;
-    this.randomOffset = 0;
-    this.lastRandomUpdate = 0;
-  }
-
-  update(dt) {
-    // Update ring switch animation
-    if (this.ringSwitchProgress > 0) {
-      this.ringSwitchProgress += dt / RING_SWITCH_DURATION;
-      if (this.ringSwitchProgress >= 1) {
-        this.ringSwitchProgress = 0;
-        this.ring = this.ringSwitchTo;
-      }
-    }
-
-    // AI decision making
-    this.makeDecision(dt);
-
-    // Movement physics
-    const angleDiff = angleDifference(this.targetAngle, this.angle);
-    let desiredDirection = 0;
-
-    if (Math.abs(angleDiff) > 0.02) {
-      desiredDirection = angleDiff > 0 ? 1 : -1;
-    }
-
-    if (desiredDirection !== 0) {
-      this.velocity += desiredDirection * PADDLE_ACCELERATION * dt;
-      this.velocity = Math.max(-this.maxSpeed, Math.min(this.maxSpeed, this.velocity));
-    } else {
-      if (Math.abs(this.velocity) < 0.1) {
-        this.velocity = 0;
-      } else if (this.velocity > 0) {
-        this.velocity = Math.max(0, this.velocity - PADDLE_DECELERATION * dt);
-      } else {
-        this.velocity = Math.min(0, this.velocity + PADDLE_DECELERATION * dt);
-      }
-    }
-
-    this.angle += this.velocity * dt;
-    this.angle = normalizeAngle(this.angle);
-  }
-
-  makeDecision(dt) {
-    // Only make decisions at intervals based on reaction time
-    if (gameTime - this.lastDecisionTime < this.reactionTime) return;
-    this.lastDecisionTime = gameTime;
-
-    // Update random offset for unpredictable AI
-    if (this.personality === 'unpredictable' && gameTime - this.lastRandomUpdate > 0.5) {
-      this.randomOffset = (Math.random() - 0.5) * 0.3;
-      this.lastRandomUpdate = gameTime;
-    }
-
-    // Find the most threatening ball for this AI's sector
-    let bestTarget = null;
-    let bestThreat = 0;
-
-    const myRadius = this.getCurrentRadius();
-    const sectorStart = this.baseAngle - Math.PI / 3;
-    const sectorEnd = this.baseAngle + Math.PI / 3;
-
-    // Check regular balls
-    for (const ball of balls) {
-      if (ball.escaped) continue;
-
-      const dx = ball.x - centerX;
-      const dy = ball.y - centerY;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      const ballAngle = Math.atan2(dy, dx);
-
-      // Check if ball is in our sector
-      const inSector = this.isAngleInSector(ballAngle, sectorStart, sectorEnd);
-      if (!inSector) continue;
-
-      // Calculate threat level based on distance and velocity toward edge
-      const velTowardEdge = (ball.vx * dx + ball.vy * dy) / dist;
-      const timeToEdge = velTowardEdge > 0 ? (arenaRadius - dist) / velTowardEdge : Infinity;
-      const threat = velTowardEdge > 0 ? (1 / (timeToEdge + 0.5)) * (dist / arenaRadius) : 0;
-
-      if (threat > bestThreat) {
-        bestThreat = threat;
-        bestTarget = { ball, angle: ballAngle, dist, type: 'regular' };
-      }
-    }
-
-    // Check special ball
-    if (specialBall && !specialBallReturning) {
-      const dx = specialBall.x - centerX;
-      const dy = specialBall.y - centerY;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      const ballAngle = Math.atan2(dy, dx);
-
-      const inSector = this.isAngleInSector(ballAngle, sectorStart, sectorEnd);
-      if (inSector) {
-        const velTowardEdge = (specialBall.vx * dx + specialBall.vy * dy) / dist;
-        const threat = velTowardEdge > 0 ? (2 / ((arenaRadius - dist) / velTowardEdge + 0.5)) : 0;
-
-        if (threat > bestThreat) {
-          bestThreat = threat;
-          bestTarget = { ball: specialBall, angle: ballAngle, dist, type: 'special' };
-        }
-      }
-    }
-
-    this.currentTarget = bestTarget;
-
-    if (bestTarget) {
-      // Add accuracy variation
-      const accuracyError = (1 - this.accuracy) * (Math.random() - 0.5) * 0.4;
-
-      // Personality-specific behavior
-      let targetOffset = 0;
-      switch (this.personality) {
-        case 'aggressive':
-          // Try to hit with edge for bonus points
-          if (Math.random() < this.riskTolerance) {
-            targetOffset = (Math.random() > 0.5 ? 1 : -1) * this.arc * 0.4;
-          }
-          break;
-        case 'unpredictable':
-          targetOffset = this.randomOffset;
-          break;
-        case 'defensive':
-          // Stay centered on ball
-          targetOffset = 0;
-          break;
-      }
-
-      this.targetAngle = bestTarget.angle + accuracyError + targetOffset;
-
-      // Ring switching logic for aggressive AI
-      if (this.personality === 'aggressive' && bestTarget.dist < arenaRadius * 0.6) {
-        if (Math.random() < this.riskTolerance * 0.3 && this.ringSwitchProgress <= 0) {
-          this.switchRing();
-        }
-      }
-    } else {
-      // No immediate threat - return to base position
-      this.targetAngle = this.baseAngle + Math.sin(gameTime * 0.5) * 0.1;
-    }
-  }
-
-  isAngleInSector(angle, start, end) {
-    const normalizedAngle = normalizeAngle(angle);
-    const normalizedStart = normalizeAngle(start);
-    const normalizedEnd = normalizeAngle(end);
-
-    if (normalizedStart < normalizedEnd) {
-      return normalizedAngle >= normalizedStart && normalizedAngle <= normalizedEnd;
-    } else {
-      return normalizedAngle >= normalizedStart || normalizedAngle <= normalizedEnd;
-    }
-  }
-
-  switchRing() {
-    if (this.ringSwitchProgress > 0) return;
-    const targetRing = this.ring === 0 ? 1 : 0;
-    this.ringSwitchFrom = this.ring;
-    this.ringSwitchTo = targetRing;
-    this.ringSwitchProgress = 0.001;
-  }
-
-  getCurrentRadius() {
-    if (this.ringSwitchProgress <= 0) {
-      return this.ring === 0 ? arenaRadius : innerRadius;
-    }
-    const fromRadius = this.ringSwitchFrom === 0 ? arenaRadius : innerRadius;
-    const toRadius = this.ringSwitchTo === 0 ? arenaRadius : innerRadius;
-    return fromRadius + (toRadius - fromRadius) * this.ringSwitchProgress;
-  }
-
-  checkCollision(ballX, ballY, ballRadius) {
-    const dx = ballX - centerX;
-    const dy = ballY - centerY;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    const ballAngle = Math.atan2(dy, dx);
-
-    const paddleRadius = this.getCurrentRadius();
-    const halfThickness = PADDLE_THICKNESS / 2;
-
-    const angleToPaddle = angleDifference(ballAngle, this.angle);
-    const withinArc = Math.abs(angleToPaddle) <= this.arc / 2;
-    const withinRadius = dist >= paddleRadius - halfThickness - ballRadius &&
-                         dist <= paddleRadius + halfThickness + ballRadius;
-
-    if (withinArc && withinRadius) {
-      const edgeFactor = Math.abs(angleToPaddle) / (this.arc / 2);
-      const deflectAngle = ballAngle + Math.PI + (angleToPaddle * edgeFactor * 0.5);
-      return { hit: true, edgeHit: false, deflectAngle, aiIndex: this.index };
-    }
-
-    // Check paddle end caps
-    const paddleStart = this.angle - this.arc / 2;
-    const paddleEnd = this.angle + this.arc / 2;
-
-    const startCapX = centerX + Math.cos(paddleStart) * paddleRadius;
-    const startCapY = centerY + Math.sin(paddleStart) * paddleRadius;
-    const dxStart = ballX - startCapX;
-    const dyStart = ballY - startCapY;
-    const distStart = Math.sqrt(dxStart * dxStart + dyStart * dyStart);
-
-    if (distStart <= halfThickness + ballRadius) {
-      const deflectAngle = Math.atan2(dyStart, dxStart);
-      return { hit: true, edgeHit: true, deflectAngle, aiIndex: this.index };
-    }
-
-    const endCapX = centerX + Math.cos(paddleEnd) * paddleRadius;
-    const endCapY = centerY + Math.sin(paddleEnd) * paddleRadius;
-    const dxEnd = ballX - endCapX;
-    const dyEnd = ballY - endCapY;
-    const distEnd = Math.sqrt(dxEnd * dxEnd + dyEnd * dyEnd);
-
-    if (distEnd <= halfThickness + ballRadius) {
-      const deflectAngle = Math.atan2(dyEnd, dxEnd);
-      return { hit: true, edgeHit: true, deflectAngle, aiIndex: this.index };
-    }
-
-    return { hit: false, edgeHit: false, deflectAngle: 0, aiIndex: this.index };
-  }
-
-  draw() {
-    const paddleRadius = this.getCurrentRadius();
-
-    // Glow effect
-    ctx.shadowBlur = 10;
-    ctx.shadowColor = this.color;
-
-    ctx.strokeStyle = this.color;
-    ctx.lineWidth = PADDLE_THICKNESS;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, paddleRadius, this.angle - this.arc / 2, this.angle + this.arc / 2);
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-
-    // Draw name label near paddle
-    ctx.font = '10px "Press Start 2P", monospace';
-    ctx.textAlign = 'center';
-    ctx.fillStyle = this.color;
-    const labelX = centerX + Math.cos(this.angle) * (paddleRadius + 30);
-    const labelY = centerY + Math.sin(this.angle) * (paddleRadius + 30);
-    ctx.fillText(this.name, labelX, labelY);
-  }
-
-  recordSave() {
-    this.saves++;
-    this.streakSaves++;
-    if (this.streakSaves > this.bestStreak) {
-      this.bestStreak = this.streakSaves;
-    }
-  }
-
-  recordMiss() {
-    this.misses++;
-    this.streakSaves = 0;
-  }
-}
 
 // === AUDIO SYSTEM ===
 const AudioSystem = {
@@ -483,24 +198,6 @@ const AudioSystem = {
     gain.connect(this.sfxGain);
     osc.start();
     osc.stop(this.ctx.currentTime + 0.15);
-  },
-
-  playAIHit(aiColor) {
-    if (!this.ctx) return;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    // Different tones for different AI
-    const freqMap = { '#00ff88': 330, '#ff4488': 440, '#ffaa00': 380 };
-    const freq = freqMap[aiColor] || 400;
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(freq * 0.7, this.ctx.currentTime + 0.08);
-    gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.08);
-    osc.connect(gain);
-    gain.connect(this.sfxGain);
-    osc.start();
-    osc.stop(this.ctx.currentTime + 0.12);
   },
 
   playSpecialHit(isEdgeHit = false, momentum = 1) {
@@ -705,6 +402,26 @@ const AudioSystem = {
     osc.stop(this.ctx.currentTime + 0.2);
   },
 
+  playWaveWarning() {
+    if (!this.ctx) return;
+    for (let i = 0; i < 3; i++) {
+      setTimeout(() => {
+        if (!this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(880, this.ctx.currentTime);
+        osc.frequency.setValueAtTime(660, this.ctx.currentTime + 0.05);
+        gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.1);
+        osc.connect(gain);
+        gain.connect(this.sfxGain);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.12);
+      }, i * 100);
+    }
+  },
+
   playRingSwitch() {
     if (!this.ctx) return;
     const osc = this.ctx.createOscillator();
@@ -786,6 +503,106 @@ const AudioSystem = {
   setMusicIntensity(intensity) {
     if (!this.musicGain) return;
     this.musicGain.gain.setTargetAtTime(0.08 + intensity * 0.12, this.ctx.currentTime, 0.5);
+  },
+
+  // Clash audio - initial contact
+  playClashStart() {
+    if (!this.ctx) return;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(150, this.ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(80, this.ctx.currentTime + 0.15);
+    gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+    osc.connect(gain);
+    gain.connect(this.sfxGain);
+    osc.start();
+    osc.stop(this.ctx.currentTime + 0.2);
+  },
+
+  // Clash audio - ongoing tension (grinding sound)
+  clashTensionOsc: null,
+  clashTensionGain: null,
+  clashTensionFilter: null,
+
+  playClashTension(intensity) {
+    if (!this.ctx) return;
+
+    // Create or update the tension oscillator
+    if (!this.clashTensionOsc) {
+      this.clashTensionOsc = this.ctx.createOscillator();
+      this.clashTensionGain = this.ctx.createGain();
+      this.clashTensionFilter = this.ctx.createBiquadFilter();
+
+      this.clashTensionOsc.type = 'sawtooth';
+      this.clashTensionOsc.frequency.value = 60;
+
+      this.clashTensionFilter.type = 'lowpass';
+      this.clashTensionFilter.frequency.value = 300;
+      this.clashTensionFilter.Q.value = 5;
+
+      this.clashTensionGain.gain.value = 0;
+
+      this.clashTensionOsc.connect(this.clashTensionFilter);
+      this.clashTensionFilter.connect(this.clashTensionGain);
+      this.clashTensionGain.connect(this.sfxGain);
+      this.clashTensionOsc.start();
+    }
+
+    // Modulate based on intensity
+    const targetGain = intensity * 0.15;
+    const targetFreq = 40 + intensity * 80;
+    const targetFilterFreq = 200 + intensity * 600;
+
+    this.clashTensionGain.gain.setTargetAtTime(targetGain, this.ctx.currentTime, 0.05);
+    this.clashTensionOsc.frequency.setTargetAtTime(targetFreq, this.ctx.currentTime, 0.05);
+    this.clashTensionFilter.frequency.setTargetAtTime(targetFilterFreq, this.ctx.currentTime, 0.05);
+  },
+
+  stopClashTension() {
+    if (this.clashTensionGain) {
+      this.clashTensionGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.1);
+    }
+  },
+
+  // Clash audio - resolution (one paddle wins)
+  playClashResolve(intensity) {
+    if (!this.ctx) return;
+
+    // Stop the tension sound
+    this.stopClashTension();
+
+    // Impact sound
+    const osc = this.ctx.createOscillator();
+    const osc2 = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    const filter = this.ctx.createBiquadFilter();
+
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(100 + intensity * 50, this.ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(40, this.ctx.currentTime + 0.3);
+
+    osc2.type = 'sawtooth';
+    osc2.frequency.setValueAtTime(200 + intensity * 100, this.ctx.currentTime);
+    osc2.frequency.exponentialRampToValueAtTime(60, this.ctx.currentTime + 0.2);
+
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(1000, this.ctx.currentTime);
+    filter.frequency.exponentialRampToValueAtTime(100, this.ctx.currentTime + 0.3);
+
+    gain.gain.setValueAtTime(0.3 + intensity * 0.2, this.ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+
+    osc.connect(filter);
+    osc2.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.sfxGain);
+
+    osc.start();
+    osc2.start();
+    osc.stop(this.ctx.currentTime + 0.35);
+    osc2.stop(this.ctx.currentTime + 0.25);
   }
 };
 
@@ -931,7 +748,6 @@ function incrementCombo() {
     AudioSystem.playCombo(COMBO_MILESTONES.indexOf(combo));
     triggerScreenShake(5 + combo * 0.2);
     spawnRingBurst(centerX, centerY, arenaRadius * 0.3, getComboColor(), combo);
-    sendTickerMessage(`TEAM COMBO x${combo}!`, 'celebration');
   }
 }
 
@@ -1037,6 +853,64 @@ function drawPaddleTrail() {
   }
 }
 
+// === WAVE SYSTEM ===
+let currentWave = 0;
+let waveTimer = 0;
+let waveActive = false;
+let waveType = 'NORMAL';
+const WAVE_INTERVAL = 25;
+const WAVE_DURATION = 8;
+const WAVE_TYPES = ['SWARM', 'RAPID', 'CHAOS', 'BOSS'];
+
+function startWave() {
+  currentWave++;
+  waveActive = true;
+  waveTimer = 0;
+  if (currentWave % 4 === 0) {
+    waveType = 'BOSS';
+  } else {
+    waveType = WAVE_TYPES[Math.floor(Math.random() * 3)];
+  }
+  AudioSystem.playWaveWarning();
+  triggerScreenShake(8);
+  spawnRingBurst(centerX, centerY, arenaRadius * 0.5, '#ff0000', 40);
+}
+
+function updateWave(dt) {
+  if (!waveActive) {
+    waveTimer += dt;
+    if (waveTimer >= WAVE_INTERVAL && gameTime > 20) {
+      startWave();
+    }
+  } else {
+    waveTimer += dt;
+    if (waveTimer >= WAVE_DURATION) {
+      waveActive = false;
+      waveTimer = 0;
+    }
+  }
+}
+
+function getWaveSpawnRate() {
+  if (!waveActive) return 1;
+  switch (waveType) {
+    case 'SWARM': return 3;
+    case 'RAPID': return 2.5;
+    case 'CHAOS': return 2;
+    case 'BOSS': return 0.5;
+    default: return 1;
+  }
+}
+
+function getWaveBallSpeed() {
+  if (!waveActive) return 1;
+  switch (waveType) {
+    case 'RAPID': return 1.5;
+    case 'CHAOS': return 1.3;
+    default: return 1;
+  }
+}
+
 // === NEAR MISS SYSTEM ===
 const NEAR_MISS_THRESHOLD = 30;
 
@@ -1070,8 +944,662 @@ function checkMilestones() {
       AudioSystem.playMilestone();
       spawnRingBurst(centerX, centerY, arenaRadius * 0.4, '#ffff00', 50);
       triggerScreenShake(10);
-      sendTickerMessage(`${milestone} points! Keep it up!`, 'celebration');
     }
+  }
+}
+
+// === PADDLE COLLISION SYSTEM ===
+
+// Contact tracking - who's touching who
+let paddleContacts = []; // { paddle1, paddle2, intensity }
+
+// Forcefield parameters - magnetic repulsion before contact
+const FORCEFIELD_RADIUS = 0.18; // Radians - soft repulsion zone
+const FORCEFIELD_STRENGTH = 8.0; // Base repulsion force multiplier
+const CONTACT_STIFFNESS = 25.0; // Hard separation force on overlap
+const MOMENTUM_ELASTICITY = 0.65; // How much momentum transfers (0-1)
+const FRICTION_COEFFICIENT = 0.92; // Velocity retention during clash
+
+let paddleProximities = []; // Track pairs approaching each other
+let clashIntensities = {}; // Track sustained clash intensity per pair
+
+// Calculate signed angular distance (positive = clockwise)
+function getAngularDistance(angle1, angle2, arc1, arc2) {
+  const diff = angleDifference(angle2, angle1); // Signed difference
+  const touchDistance = (arc1 + arc2) / 2;
+  const separation = Math.abs(diff) - touchDistance;
+  return { diff, separation, touchDistance };
+}
+
+// Check if two paddles are close enough to interact (same ring zone)
+function arePaddlesInSameZone(radius1, radius2) {
+  return Math.abs(radius1 - radius2) < 40; // Within 40px radially
+}
+
+// Calculate repulsion force based on distance (inverse square-ish with soft cap)
+function calculateRepulsionForce(separation, velocity1, velocity2) {
+  if (separation >= FORCEFIELD_RADIUS) return 0;
+  if (separation <= 0) {
+    // Overlapping - strong separation force
+    return CONTACT_STIFFNESS * Math.max(0.01, -separation + 0.02);
+  }
+  // Forcefield zone - smooth exponential falloff
+  const normalizedDist = separation / FORCEFIELD_RADIUS;
+  const baseForce = FORCEFIELD_STRENGTH * Math.pow(1 - normalizedDist, 2.5);
+
+  // Approaching paddles feel more resistance
+  const approachVel = velocity1 - velocity2; // Relative velocity
+  const approachBonus = Math.max(0, -approachVel * 0.3);
+
+  return baseForce + approachBonus;
+}
+
+function updatePaddleProximities() {
+  paddleProximities = [];
+  const playerRadius = getCurrentPaddleRadius();
+
+  // Check player vs each AI
+  for (let aiIndex = 0; aiIndex < AI_PADDLES.length; aiIndex++) {
+    const ai = AI_PADDLES[aiIndex];
+    const aiRadius = getAIPaddleRadius(ai);
+
+    if (!arePaddlesInSameZone(playerRadius, aiRadius)) continue;
+
+    const { separation } = getAngularDistance(paddleAngle, ai.angle, paddleArc, PADDLE_ARC_BASE);
+
+    if (separation < FORCEFIELD_RADIUS && separation > 0) {
+      const intensity = 1 - (separation / FORCEFIELD_RADIUS);
+      paddleProximities.push({
+        paddle1: 'player',
+        paddle2: `ai${aiIndex}`,
+        intensity: Math.pow(intensity, 1.5), // Ease-in curve for tension buildup
+        angle: (paddleAngle + ai.angle) / 2,
+        separation
+      });
+    }
+  }
+
+  // Check AI vs AI
+  for (let i = 0; i < AI_PADDLES.length; i++) {
+    for (let j = i + 1; j < AI_PADDLES.length; j++) {
+      const ai1 = AI_PADDLES[i];
+      const ai2 = AI_PADDLES[j];
+      const radius1 = getAIPaddleRadius(ai1);
+      const radius2 = getAIPaddleRadius(ai2);
+
+      if (!arePaddlesInSameZone(radius1, radius2)) continue;
+
+      const { separation } = getAngularDistance(ai1.angle, ai2.angle, PADDLE_ARC_BASE, PADDLE_ARC_BASE);
+
+      if (separation < FORCEFIELD_RADIUS && separation > 0) {
+        const intensity = 1 - (separation / FORCEFIELD_RADIUS);
+        paddleProximities.push({
+          paddle1: `ai${i}`,
+          paddle2: `ai${j}`,
+          intensity: Math.pow(intensity, 1.5),
+          angle: (ai1.angle + ai2.angle) / 2,
+          separation
+        });
+      }
+    }
+  }
+}
+
+function checkPaddleOverlap(angle1, angle2, arc1, arc2) {
+  const diff = Math.abs(angleDifference(angle1, angle2));
+  return diff < (arc1 + arc2) / 2;
+}
+
+// Momentum-based collision with magnetic repulsion
+function resolvePaddleCollisions(dt) {
+  paddleContacts = [];
+  const playerRadius = getCurrentPaddleRadius();
+
+  // === PLAYER VS AI ===
+  for (let aiIndex = 0; aiIndex < AI_PADDLES.length; aiIndex++) {
+    const ai = AI_PADDLES[aiIndex];
+    const aiRadius = getAIPaddleRadius(ai);
+
+    if (!arePaddlesInSameZone(playerRadius, aiRadius)) continue;
+
+    const { diff, separation, touchDistance } = getAngularDistance(
+      paddleAngle, ai.angle, paddleArc, PADDLE_ARC_BASE
+    );
+    const pushDir = Math.sign(diff); // Direction to push AI away from player
+
+    // Calculate momenta (consider direction relative to opponent)
+    const playerTowardAI = paddleVelocity * pushDir; // Positive = moving toward AI
+    const aiTowardPlayer = -ai.velocity * pushDir; // Positive = AI moving toward player
+    const playerMomentum = Math.abs(paddleVelocity);
+    const aiMomentum = Math.abs(ai.velocity);
+
+    // Forcefield zone - apply soft repulsion
+    if (separation < FORCEFIELD_RADIUS && separation > 0) {
+      const repulsion = calculateRepulsionForce(separation, playerTowardAI, aiTowardPlayer);
+      const force = repulsion * dt;
+
+      // Momentum determines who gets pushed more
+      const totalMass = playerMomentum + aiMomentum + 0.5;
+      const playerResist = 0.3 + 0.7 * (playerMomentum / totalMass);
+      const aiResist = 0.3 + 0.7 * (aiMomentum / totalMass);
+
+      // Apply repulsion (weaker paddle feels more force)
+      paddleAngle -= pushDir * force * (1 - playerResist) * 0.5;
+      ai.angle += pushDir * force * (1 - aiResist) * 0.5;
+
+      // Velocity damping in forcefield (creates tension)
+      if (playerTowardAI > 0) paddleVelocity *= (1 - 0.08 * dt * (1 - separation / FORCEFIELD_RADIUS));
+      if (aiTowardPlayer > 0) ai.velocity *= (1 - 0.08 * dt * (1 - separation / FORCEFIELD_RADIUS));
+    }
+
+    // Contact/overlap - hard collision resolution
+    if (separation <= 0) {
+      paddleContacts.push({
+        paddle1: 'player',
+        paddle2: `ai${aiIndex}`,
+        intensity: Math.min(1, -separation * 10 + 0.5)
+      });
+
+      const overlap = -separation;
+      const totalMomentum = playerMomentum + aiMomentum + 0.2;
+
+      // Momentum ratio determines who dominates (smooth gradient, not threshold)
+      const playerDominance = playerMomentum / totalMomentum;
+      const aiDominance = aiMomentum / totalMomentum;
+
+      // Separation force - stronger paddle pushes weaker one away
+      const separationForce = (overlap + 0.01) * CONTACT_STIFFNESS * dt;
+      paddleAngle -= pushDir * separationForce * aiDominance;
+      ai.angle += pushDir * separationForce * playerDominance;
+
+      // Momentum transfer - elastic collision with dominance
+      const dominanceRatio = (playerMomentum - aiMomentum) / totalMomentum;
+
+      if (dominanceRatio > 0.15) {
+        // Player dominant - transfer momentum to AI
+        const transferAmount = playerMomentum * MOMENTUM_ELASTICITY * dominanceRatio;
+        ai.velocity += Math.sign(paddleVelocity) * transferAmount;
+        paddleVelocity *= FRICTION_COEFFICIENT - (dominanceRatio * 0.15);
+      } else if (dominanceRatio < -0.15) {
+        // AI dominant - transfer momentum to player
+        const transferAmount = aiMomentum * MOMENTUM_ELASTICITY * (-dominanceRatio);
+        paddleVelocity += Math.sign(ai.velocity) * transferAmount;
+        ai.velocity *= FRICTION_COEFFICIENT - ((-dominanceRatio) * 0.15);
+      } else {
+        // Evenly matched - grinding clash, both lose momentum
+        const clashFriction = 0.94 - (0.06 * (1 - Math.abs(dominanceRatio) / 0.15));
+        paddleVelocity *= clashFriction;
+        ai.velocity *= clashFriction;
+
+        // Slight mutual repulsion in stalemate
+        paddleAngle -= pushDir * 0.002;
+        ai.angle += pushDir * 0.002;
+      }
+    }
+  }
+
+  // === AI VS AI ===
+  for (let i = 0; i < AI_PADDLES.length; i++) {
+    for (let j = i + 1; j < AI_PADDLES.length; j++) {
+      const ai1 = AI_PADDLES[i];
+      const ai2 = AI_PADDLES[j];
+      const radius1 = getAIPaddleRadius(ai1);
+      const radius2 = getAIPaddleRadius(ai2);
+
+      if (!arePaddlesInSameZone(radius1, radius2)) continue;
+
+      const { diff, separation, touchDistance } = getAngularDistance(
+        ai1.angle, ai2.angle, PADDLE_ARC_BASE, PADDLE_ARC_BASE
+      );
+      const pushDir = Math.sign(diff);
+
+      const ai1TowardAi2 = ai1.velocity * pushDir;
+      const ai2TowardAi1 = -ai2.velocity * pushDir;
+      const ai1Momentum = Math.abs(ai1.velocity);
+      const ai2Momentum = Math.abs(ai2.velocity);
+
+      // Forcefield zone
+      if (separation < FORCEFIELD_RADIUS && separation > 0) {
+        const repulsion = calculateRepulsionForce(separation, ai1TowardAi2, ai2TowardAi1);
+        const force = repulsion * dt;
+
+        const totalMass = ai1Momentum + ai2Momentum + 0.5;
+        const ai1Resist = 0.3 + 0.7 * (ai1Momentum / totalMass);
+        const ai2Resist = 0.3 + 0.7 * (ai2Momentum / totalMass);
+
+        ai1.angle -= pushDir * force * (1 - ai1Resist) * 0.5;
+        ai2.angle += pushDir * force * (1 - ai2Resist) * 0.5;
+
+        if (ai1TowardAi2 > 0) ai1.velocity *= (1 - 0.08 * dt * (1 - separation / FORCEFIELD_RADIUS));
+        if (ai2TowardAi1 > 0) ai2.velocity *= (1 - 0.08 * dt * (1 - separation / FORCEFIELD_RADIUS));
+      }
+
+      // Contact/overlap
+      if (separation <= 0) {
+        paddleContacts.push({
+          paddle1: `ai${i}`,
+          paddle2: `ai${j}`,
+          intensity: Math.min(1, -separation * 10 + 0.5)
+        });
+
+        const overlap = -separation;
+        const totalMomentum = ai1Momentum + ai2Momentum + 0.2;
+
+        const ai1Dominance = ai1Momentum / totalMomentum;
+        const ai2Dominance = ai2Momentum / totalMomentum;
+
+        const separationForce = (overlap + 0.01) * CONTACT_STIFFNESS * dt;
+        ai1.angle -= pushDir * separationForce * ai2Dominance;
+        ai2.angle += pushDir * separationForce * ai1Dominance;
+
+        const dominanceRatio = (ai1Momentum - ai2Momentum) / totalMomentum;
+
+        if (dominanceRatio > 0.15) {
+          const transferAmount = ai1Momentum * MOMENTUM_ELASTICITY * dominanceRatio;
+          ai2.velocity += Math.sign(ai1.velocity) * transferAmount;
+          ai1.velocity *= FRICTION_COEFFICIENT - (dominanceRatio * 0.15);
+        } else if (dominanceRatio < -0.15) {
+          const transferAmount = ai2Momentum * MOMENTUM_ELASTICITY * (-dominanceRatio);
+          ai1.velocity += Math.sign(ai2.velocity) * transferAmount;
+          ai2.velocity *= FRICTION_COEFFICIENT - ((-dominanceRatio) * 0.15);
+        } else {
+          const clashFriction = 0.94 - (0.06 * (1 - Math.abs(dominanceRatio) / 0.15));
+          ai1.velocity *= clashFriction;
+          ai2.velocity *= clashFriction;
+
+          ai1.angle -= pushDir * 0.002;
+          ai2.angle += pushDir * 0.002;
+        }
+      }
+    }
+  }
+}
+
+// Helper to check if player is in contact with another paddle
+function isPlayerInContact() {
+  for (const contact of paddleContacts) {
+    if (contact.paddle1 === 'player' || contact.paddle2 === 'player') {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Helper to check if an AI is in contact with another paddle
+function isAIInContact(aiIndex) {
+  const aiId = `ai${aiIndex}`;
+  for (const contact of paddleContacts) {
+    if (contact.paddle1 === aiId || contact.paddle2 === aiId) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Helper to check if player is in proximity zone with another paddle
+function getPlayerProximityIntensity() {
+  for (const prox of paddleProximities) {
+    if (prox.paddle1 === 'player' || prox.paddle2 === 'player') {
+      return prox.intensity;
+    }
+  }
+  return 0;
+}
+
+// Helper to check if an AI is in proximity zone
+function getAIProximityIntensity(aiIndex) {
+  const aiId = `ai${aiIndex}`;
+  for (const prox of paddleProximities) {
+    if (prox.paddle1 === aiId || prox.paddle2 === aiId) {
+      return prox.intensity;
+    }
+  }
+  return 0;
+}
+
+// Track audio state for smooth transitions
+let lastClashState = false;
+let lastProximityIntensity = 0;
+
+// Update audio feedback based on proximity and contacts
+function updateCollisionAudio() {
+  // Check for player involvement in contacts or proximities
+  let playerInContact = false;
+  let maxProximityIntensity = 0;
+
+  for (const contact of paddleContacts) {
+    if (contact.paddle1 === 'player' || contact.paddle2 === 'player') {
+      playerInContact = true;
+      break;
+    }
+  }
+
+  for (const prox of paddleProximities) {
+    if (prox.paddle1 === 'player' || prox.paddle2 === 'player') {
+      maxProximityIntensity = Math.max(maxProximityIntensity, prox.intensity);
+    }
+  }
+
+  // Trigger clash start sound on contact
+  if (playerInContact && !lastClashState) {
+    AudioSystem.playClashStart();
+  }
+
+  // Play tension audio during proximity (intensity-based)
+  if (maxProximityIntensity > 0.3) {
+    AudioSystem.playClashTension(maxProximityIntensity);
+  }
+
+  // Play resolve sound when clash ends
+  if (lastClashState && !playerInContact && lastProximityIntensity > 0.5) {
+    AudioSystem.playClashResolve(lastProximityIntensity);
+  }
+
+  lastClashState = playerInContact;
+  lastProximityIntensity = maxProximityIntensity;
+}
+
+// Draw energy arc between clashing paddles
+function drawClashEffects() {
+  for (const contact of paddleContacts) {
+    // Get paddle positions
+    let angle1, angle2, radius1, radius2, color1, color2;
+
+    if (contact.paddle1 === 'player') {
+      angle1 = paddleAngle;
+      radius1 = getCurrentPaddleRadius();
+      color1 = '#00ffff';
+    } else {
+      const idx = parseInt(contact.paddle1.replace('ai', ''));
+      const ai = AI_PADDLES[idx];
+      angle1 = ai.angle;
+      radius1 = getAIPaddleRadius(ai);
+      color1 = ai.color;
+    }
+
+    if (contact.paddle2.startsWith('ai')) {
+      const idx = parseInt(contact.paddle2.replace('ai', ''));
+      const ai = AI_PADDLES[idx];
+      angle2 = ai.angle;
+      radius2 = getAIPaddleRadius(ai);
+      color2 = ai.color;
+    } else {
+      angle2 = paddleAngle;
+      radius2 = getCurrentPaddleRadius();
+      color2 = '#00ffff';
+    }
+
+    // Draw clash sparks at contact point
+    const midAngle = (angle1 + angle2) / 2;
+    const midRadius = (radius1 + radius2) / 2;
+    const intensity = contact.intensity || 0.5;
+
+    // Pulsing energy effect
+    const pulse = 0.7 + Math.sin(gameTime * 20) * 0.3;
+    const sparkX = centerX + Math.cos(midAngle) * midRadius;
+    const sparkY = centerY + Math.sin(midAngle) * midRadius;
+
+    // Energy glow at clash point
+    const gradient = ctx.createRadialGradient(sparkX, sparkY, 0, sparkX, sparkY, 20 * intensity);
+    gradient.addColorStop(0, `rgba(255, 255, 255, ${0.8 * pulse * intensity})`);
+    gradient.addColorStop(0.3, `rgba(255, 200, 100, ${0.5 * pulse * intensity})`);
+    gradient.addColorStop(1, 'rgba(255, 100, 50, 0)');
+
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(sparkX, sparkY, 20 * intensity, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Lightning-like energy lines
+    if (intensity > 0.3) {
+      ctx.strokeStyle = `rgba(255, 255, 200, ${0.6 * intensity * pulse})`;
+      ctx.lineWidth = 1.5;
+      for (let i = 0; i < 3; i++) {
+        const offsetAngle = midAngle + (Math.random() - 0.5) * 0.1;
+        const len = 15 + Math.random() * 10;
+        ctx.beginPath();
+        ctx.moveTo(sparkX, sparkY);
+        ctx.lineTo(
+          sparkX + Math.cos(offsetAngle + Math.random()) * len,
+          sparkY + Math.sin(offsetAngle + Math.random()) * len
+        );
+        ctx.stroke();
+      }
+    }
+
+    // Subtle screen vibration during sustained clash
+    if (intensity > 0.6 && contact.paddle1 === 'player') {
+      triggerScreenShake(intensity * 1.5);
+    }
+  }
+}
+
+// Draw forcefield tension arcs between approaching paddles
+function drawProximityEffects() {
+  for (const prox of paddleProximities) {
+    let angle1, angle2, radius1, radius2, color1, color2;
+
+    if (prox.paddle1 === 'player') {
+      angle1 = paddleAngle;
+      radius1 = getCurrentPaddleRadius();
+      color1 = '0, 255, 255';
+    } else {
+      const idx = parseInt(prox.paddle1.replace('ai', ''));
+      const ai = AI_PADDLES[idx];
+      angle1 = ai.angle;
+      radius1 = getAIPaddleRadius(ai);
+      color1 = ai.color === '#88ff88' ? '136, 255, 136' : '255, 136, 136';
+    }
+
+    if (prox.paddle2.startsWith('ai')) {
+      const idx = parseInt(prox.paddle2.replace('ai', ''));
+      const ai = AI_PADDLES[idx];
+      angle2 = ai.angle;
+      radius2 = getAIPaddleRadius(ai);
+      color2 = ai.color === '#88ff88' ? '136, 255, 136' : '255, 136, 136';
+    }
+
+    const intensity = prox.intensity;
+    const midAngle = (angle1 + angle2) / 2;
+    const midRadius = (radius1 + radius2) / 2;
+
+    // Draw repulsion field arc between paddles
+    const fieldX = centerX + Math.cos(midAngle) * midRadius;
+    const fieldY = centerY + Math.sin(midAngle) * midRadius;
+
+    // Pulsing warning glow
+    const pulse = 0.6 + Math.sin(gameTime * 12 * (1 + intensity)) * 0.4;
+    const glowSize = 12 + intensity * 15;
+
+    const gradient = ctx.createRadialGradient(fieldX, fieldY, 0, fieldX, fieldY, glowSize);
+    gradient.addColorStop(0, `rgba(255, 200, 100, ${0.4 * intensity * pulse})`);
+    gradient.addColorStop(0.5, `rgba(255, 150, 50, ${0.2 * intensity * pulse})`);
+    gradient.addColorStop(1, 'rgba(255, 100, 0, 0)');
+
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(fieldX, fieldY, glowSize, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Draw connecting arc showing magnetic field lines (high intensity only)
+    if (intensity > 0.5) {
+      const arcIntensity = (intensity - 0.5) * 2;
+      ctx.strokeStyle = `rgba(255, 200, 100, ${0.3 * arcIntensity * pulse})`;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 4]);
+
+      // Draw arc segment between the two paddle edges
+      const arcStart = Math.min(angle1, angle2) + PADDLE_ARC_BASE / 2;
+      const arcEnd = Math.max(angle1, angle2) - PADDLE_ARC_BASE / 2;
+
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, midRadius, arcStart, arcEnd);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // Spawn occasional warning particles at high intensity
+    if (intensity > 0.7 && Math.random() < intensity * 0.15) {
+      spawnParticles(fieldX, fieldY, 1, '#ffaa44', 40, 2, 0.2);
+    }
+  }
+}
+
+// === AI BEHAVIOR ===
+
+function updateAIPaddles(dt) {
+  for (const ai of AI_PADDLES) {
+    // Find the best ball to chase
+    let bestBall = null;
+    let bestScore = -Infinity;
+
+    // Check all regular balls
+    for (const ball of balls) {
+      if (ball.escaped) continue;
+
+      const dx = ball.x - centerX;
+      const dy = ball.y - centerY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const normalizedDist = dist / arenaRadius;
+
+      // Skip balls outside chase threshold
+      if (normalizedDist < ai.chaseThreshold * 0.3) continue;
+
+      const ballAngle = Math.atan2(dy, dx);
+      const angleDiff = Math.abs(angleDifference(ballAngle, ai.angle));
+
+      // Score based on: proximity to edge (higher = more urgent) and angle closeness
+      const urgency = normalizedDist;
+      const angleScore = 1 - (angleDiff / Math.PI);
+      const ballScore = urgency * 2 + angleScore;
+
+      if (ballScore > bestScore) {
+        bestScore = ballScore;
+        bestBall = ball;
+      }
+    }
+
+    // Special ball is high priority for GREED
+    if (specialBall && !specialBallReturning) {
+      const dx = specialBall.x - centerX;
+      const dy = specialBall.y - centerY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const normalizedDist = dist / arenaRadius;
+
+      if (normalizedDist >= ai.chaseThreshold * 0.3) {
+        const ballAngle = Math.atan2(dy, dx);
+        const angleDiff = Math.abs(angleDifference(ballAngle, ai.angle));
+
+        // Special ball is worth more points, so prioritize it (especially for GREED)
+        const urgency = normalizedDist;
+        const angleScore = 1 - (angleDiff / Math.PI);
+        const specialBonus = ai.name === 'GREED' ? 2 : 0.5;
+        const ballScore = (urgency * 2 + angleScore) * specialBonus;
+
+        if (ballScore > bestScore) {
+          bestScore = ballScore;
+          bestBall = specialBall;
+        }
+      }
+    }
+
+    // Apply laziness - sometimes the chill AI just doesn't react
+    if (Math.random() < ai.laziness * dt * 2) {
+      bestBall = null;
+    }
+
+    // Move toward best ball
+    if (bestBall) {
+      const dx = bestBall.x - centerX;
+      const dy = bestBall.y - centerY;
+      const targetAngle = Math.atan2(dy, dx);
+      const diff = angleDifference(targetAngle, ai.angle);
+
+      // Check if path is blocked by another paddle on same ring
+      let pathBlocked = false;
+      const moveDirection = Math.sign(diff);
+
+      // Check player paddle
+      if (paddleRing === ai.ring) {
+        const playerDiff = angleDifference(paddleAngle, ai.angle);
+        const targetDiff = angleDifference(targetAngle, ai.angle);
+        // If player is between AI and target
+        if (Math.sign(playerDiff) === moveDirection &&
+            Math.abs(playerDiff) < Math.abs(targetDiff) &&
+            Math.abs(playerDiff) < PADDLE_ARC_BASE * 2) {
+          pathBlocked = true;
+        }
+      }
+
+      // Check other AI paddles
+      for (const otherAI of AI_PADDLES) {
+        if (otherAI === ai || otherAI.ring !== ai.ring) continue;
+        const otherDiff = angleDifference(otherAI.angle, ai.angle);
+        const targetDiff = angleDifference(targetAngle, ai.angle);
+        if (Math.sign(otherDiff) === moveDirection &&
+            Math.abs(otherDiff) < Math.abs(targetDiff) &&
+            Math.abs(otherDiff) < PADDLE_ARC_BASE * 2) {
+          pathBlocked = true;
+        }
+      }
+
+      // Consider switching rings if blocked (more likely for aggressive AI)
+      if (pathBlocked && Math.random() < (ai.name === 'GREED' ? 0.02 : 0.005)) {
+        const targetRing = ai.ring === 0 ? 1 : 0;
+        // Check if the target ring is clear at this position
+        let canSwitch = true;
+
+        // Check player
+        if (paddleRing === targetRing && checkPaddleOverlap(ai.angle, paddleAngle, PADDLE_ARC_BASE, paddleArc)) {
+          canSwitch = false;
+        }
+
+        // Check other AIs
+        for (const otherAI of AI_PADDLES) {
+          if (otherAI === ai) continue;
+          if (otherAI.ring === targetRing && checkPaddleOverlap(ai.angle, otherAI.angle, PADDLE_ARC_BASE, PADDLE_ARC_BASE)) {
+            canSwitch = false;
+            break;
+          }
+        }
+
+        if (canSwitch) {
+          startAIRingSwitch(ai, targetRing);
+        }
+      }
+
+      // Accelerate toward target
+      const desiredVelocity = Math.sign(diff) * Math.min(Math.abs(diff) * ai.reactionSpeed, ai.maxSpeed);
+      ai.velocity += (desiredVelocity - ai.velocity) * ai.reactionSpeed * dt;
+      ai.velocity = Math.max(-ai.maxSpeed, Math.min(ai.maxSpeed, ai.velocity));
+    } else {
+      // Decelerate when no target
+      ai.velocity *= Math.pow(0.1, dt);
+      if (Math.abs(ai.velocity) < 0.01) ai.velocity = 0;
+
+      // Occasionally return to outer ring when idle
+      if (ai.ring === 1 && Math.random() < 0.01) {
+        // Check if outer ring is clear at this position
+        let canSwitch = true;
+        if (paddleRing === 0 && checkPaddleOverlap(ai.angle, paddleAngle, PADDLE_ARC_BASE, paddleArc)) {
+          canSwitch = false;
+        }
+        for (const otherAI of AI_PADDLES) {
+          if (otherAI === ai) continue;
+          if (otherAI.ring === 0 && checkPaddleOverlap(ai.angle, otherAI.angle, PADDLE_ARC_BASE, PADDLE_ARC_BASE)) {
+            canSwitch = false;
+            break;
+          }
+        }
+        if (canSwitch) {
+          startAIRingSwitch(ai, 0);
+        }
+      }
+    }
+
+    // Update position
+    ai.angle += ai.velocity * dt;
+    ai.angle = normalizeAngle(ai.angle);
   }
 }
 
@@ -1081,86 +1609,8 @@ let keysDown = { clockwise: false, counterClockwise: false };
 
 function updateHighScoreDisplay() {
   if (highScore > 0) {
-    const holderText = highScoreHolder ? ` (${highScoreHolder})` : '';
-    highScoreDisplay.textContent = `HIGH SCORE: ${highScore}${holderText}`;
+    highScoreDisplay.textContent = `HIGH SCORE: ${highScore}`;
   }
-}
-
-// === PARENT WINDOW MESSAGING ===
-// Listen for high score data from parent window
-window.addEventListener('message', (event) => {
-  if (event.data?.type === 'HIGH_SCORE_DATA') {
-    highScore = event.data.score || 0;
-    highScoreHolder = event.data.username || '';
-    updateHighScoreDisplay();
-  }
-});
-
-function sendGameStart() {
-  if (window.parent !== window) {
-    window.parent.postMessage({
-      type: 'GAME_START',
-      game: 'orbit-solo'
-    }, '*');
-  }
-}
-
-function sendGameOver() {
-  if (window.parent !== window && score > 0) {
-    window.parent.postMessage({
-      type: 'GAME_OVER',
-      game: 'orbit-solo',
-      score: score,
-      stats: {
-        time: Math.floor(gameTime),
-        maxCombo: maxCombo,
-        aiStats: aiPaddles.map(ai => ({
-          name: ai.name,
-          saves: ai.saves,
-          misses: ai.misses,
-          bestStreak: ai.bestStreak
-        }))
-      }
-    }, '*');
-  }
-}
-
-function sendScoreUpdate() {
-  if (window.parent !== window && Date.now() - lastScoreUpdateTime >= 30000) {
-    lastScoreUpdateTime = Date.now();
-    window.parent.postMessage({
-      type: 'SCORE_UPDATE',
-      game: 'orbit-solo',
-      score: score,
-      stats: {
-        time: Math.floor(gameTime),
-        combo: combo,
-        balls: balls.length
-      }
-    }, '*');
-  }
-}
-
-// Ticker message rate limiting
-const tickerCooldowns = {};
-const TICKER_COOLDOWN = 10000; // 10 seconds between similar messages
-
-function sendTickerMessage(message, level = 'info') {
-  if (window.parent === window) return;
-
-  // Rate limit similar messages
-  const key = message.substring(0, 20);
-  const now = Date.now();
-  if (tickerCooldowns[key] && now - tickerCooldowns[key] < TICKER_COOLDOWN) return;
-  tickerCooldowns[key] = now;
-
-  window.parent.postMessage({
-    type: 'TICKER_MESSAGE',
-    game: 'orbit-solo',
-    message: message,
-    level: level,
-    priority: 'low'
-  }, '*');
 }
 
 // === CANVAS SETUP ===
@@ -1203,9 +1653,89 @@ function getPaddleTransitionScale() {
   return t < 0.5 ? 1 - (t * 2) : (t - 0.5) * 2;
 }
 
+// Get AI paddle radius with ring switch animation
+function getAIPaddleRadius(ai) {
+  if (ai.ringSwitchProgress <= 0) {
+    return ai.ring === 0 ? arenaRadius : innerRadius;
+  }
+  const fromRadius = ai.ringSwitchFrom === 0 ? arenaRadius : innerRadius;
+  const toRadius = ai.ringSwitchTo === 0 ? arenaRadius : innerRadius;
+  const t = ai.ringSwitchProgress;
+  return fromRadius + (toRadius - fromRadius) * t;
+}
+
+// Start an AI ring switch with animation
+function startAIRingSwitch(ai, targetRing) {
+  if (ai.ringSwitchProgress > 0) return false; // Already switching
+  if (ai.ring === targetRing) return false; // Already on target ring
+
+  ai.ringSwitchFrom = ai.ring;
+  ai.ringSwitchTo = targetRing;
+  ai.ringSwitchProgress = 0.001;
+  return true;
+}
+
+// Update AI ring switch animations
+function updateAIRingSwitches(dt) {
+  for (const ai of AI_PADDLES) {
+    if (ai.ringSwitchProgress > 0) {
+      ai.ringSwitchProgress += dt / RING_SWITCH_DURATION;
+      if (ai.ringSwitchProgress >= 1) {
+        ai.ringSwitchProgress = 0;
+        ai.ring = ai.ringSwitchTo;
+      }
+    }
+  }
+}
+
+// Buffer for ring switch blocking - allows slight overlap for cleaner hops
+const RING_SWITCH_CLEARANCE = 0.03; // Radians of clearance needed
+
+function isRingSwitchBlocked(playerAngle, targetRing) {
+  for (const ai of AI_PADDLES) {
+    // Check AI paddles on target ring
+    if (ai.ring === targetRing && ai.ringSwitchProgress <= 0) {
+      const { separation } = getAngularDistance(playerAngle, ai.angle, paddleArc, PADDLE_ARC_BASE);
+      // Block only if there's significant overlap (not just touching)
+      if (separation < -RING_SWITCH_CLEARANCE) {
+        return { blocked: true, ai, separation };
+      }
+    }
+    // Check AI paddles transitioning TO the target ring
+    if (ai.ringSwitchProgress > 0 && ai.ringSwitchTo === targetRing) {
+      const { separation } = getAngularDistance(playerAngle, ai.angle, paddleArc, PADDLE_ARC_BASE);
+      // More lenient for transitioning paddles (they might move)
+      if (separation < -RING_SWITCH_CLEARANCE * 2) {
+        return { blocked: true, ai, separation };
+      }
+    }
+  }
+  return { blocked: false };
+}
+
 function switchRing() {
   if (ringSwitchProgress > 0) return;
   const targetRing = paddleRing === 0 ? 1 : 0;
+
+  // Check if an opponent is blocking the target ring at our position
+  const blockCheck = isRingSwitchBlocked(paddleAngle, targetRing);
+
+  if (blockCheck.blocked) {
+    // Blocked! Play a rejection sound and show visual feedback
+    AudioSystem.playClashStart();
+    triggerScreenShake(2);
+    // Spawn blocked particles at the blocking location
+    const blockRadius = targetRing === 0 ? arenaRadius : innerRadius;
+    const blockX = centerX + Math.cos(paddleAngle) * blockRadius;
+    const blockY = centerY + Math.sin(paddleAngle) * blockRadius;
+    spawnParticles(blockX, blockY, 10, '#ff4444', 80, 3, 0.3);
+
+    // Apply a small push away from the blocker for feedback
+    const pushDir = Math.sign(angleDifference(blockCheck.ai.angle, paddleAngle));
+    paddleVelocity -= pushDir * 0.3;
+    return; // Can't switch
+  }
+
   ringSwitchFrom = paddleRing;
   ringSwitchTo = targetRing;
   ringSwitchProgress = 0.001;
@@ -1301,11 +1831,12 @@ window.addEventListener('keyup', (e) => {
 
 function spawnBall() {
   const angle = Math.random() * Math.PI * 2;
+  const waveSpeed = getWaveBallSpeed();
   balls.push({
     x: centerX,
     y: centerY,
-    vx: Math.cos(angle) * BALL_SPEED,
-    vy: Math.sin(angle) * BALL_SPEED,
+    vx: Math.cos(angle) * BALL_SPEED * waveSpeed,
+    vy: Math.sin(angle) * BALL_SPEED * waveSpeed,
     baseRadius: BALL_RADIUS,
     spawnProgress: 0,
     age: 0,
@@ -1313,8 +1844,7 @@ function spawnBall() {
     hitCooldown: 0,
     escaped: false,
     spin: 0,
-    nearMissTriggered: false,
-    lastHitBy: null // Track who hit it last
+    nearMissTriggered: false
   });
   AudioSystem.playBallSpawn();
   spawnParticles(centerX, centerY, 8, '#fff', 80, 3, 0.3);
@@ -1335,8 +1865,7 @@ function spawnSpecialBall() {
     speedMult: 1,
     hitCooldown: 0,
     returnTime: 0,
-    spin: 0,
-    lastHitBy: null
+    spin: 0
   };
   specialBallActiveTime = 0;
   specialBallReadyToReturn = false;
@@ -1346,7 +1875,6 @@ function spawnSpecialBall() {
   AudioSystem.playSpecialSpawn();
   spawnExplosion(centerX, centerY, '#ff0000', 1.5);
   triggerScreenShake(8);
-  sendTickerMessage('RED BALL spawned! Keep it in!', 'warning');
 }
 
 function spawnPowerup() {
@@ -1434,7 +1962,7 @@ function angleDifference(a, b) {
 
 function checkPaddleCollision(ballX, ballY, ballRadius) {
   if (ringSwitchProgress > 0 && ringSwitchStyle === 4) {
-    return { hit: false, edgeHit: false, deflectAngle: 0, isPlayer: false };
+    return { hit: false, edgeHit: false, deflectAngle: 0 };
   }
   const dx = ballX - centerX;
   const dy = ballY - centerY;
@@ -1451,7 +1979,7 @@ function checkPaddleCollision(ballX, ballY, ballRadius) {
   if (withinArc && withinRadius) {
     const edgeFactor = Math.abs(angleToPaddle) / (paddleArc / 2);
     const deflectAngle = ballAngle + Math.PI + (angleToPaddle * edgeFactor * 0.5);
-    return { hit: true, edgeHit: false, deflectAngle: deflectAngle, isPlayer: true };
+    return { hit: true, edgeHit: false, deflectAngle: deflectAngle };
   }
   const startCapX = centerX + Math.cos(paddleStart) * paddleRadius;
   const startCapY = centerY + Math.sin(paddleStart) * paddleRadius;
@@ -1460,7 +1988,7 @@ function checkPaddleCollision(ballX, ballY, ballRadius) {
   const distStart = Math.sqrt(dxStart * dxStart + dyStart * dyStart);
   if (distStart <= halfThickness + ballRadius) {
     const deflectAngle = Math.atan2(dyStart, dxStart);
-    return { hit: true, edgeHit: true, deflectAngle: deflectAngle, isPlayer: true };
+    return { hit: true, edgeHit: true, deflectAngle: deflectAngle };
   }
   const endCapX = centerX + Math.cos(paddleEnd) * paddleRadius;
   const endCapY = centerY + Math.sin(paddleEnd) * paddleRadius;
@@ -1469,9 +1997,51 @@ function checkPaddleCollision(ballX, ballY, ballRadius) {
   const distEnd = Math.sqrt(dxEnd * dxEnd + dyEnd * dyEnd);
   if (distEnd <= halfThickness + ballRadius) {
     const deflectAngle = Math.atan2(dyEnd, dxEnd);
-    return { hit: true, edgeHit: true, deflectAngle: deflectAngle, isPlayer: true };
+    return { hit: true, edgeHit: true, deflectAngle: deflectAngle };
   }
-  return { hit: false, edgeHit: false, deflectAngle: 0, isPlayer: false };
+  return { hit: false, edgeHit: false, deflectAngle: 0 };
+}
+
+// Generalized paddle collision for AI paddles
+function checkAIPaddleCollision(ballX, ballY, ballRadius, aiPaddle) {
+  const dx = ballX - centerX;
+  const dy = ballY - centerY;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  const ballAngle = Math.atan2(dy, dx);
+  // AI paddles use animated radius during ring switch
+  const aiPaddleRadius = getAIPaddleRadius(aiPaddle);
+  const aiPaddleArc = PADDLE_ARC_BASE;
+  const paddleStart = aiPaddle.angle - aiPaddleArc / 2;
+  const paddleEnd = aiPaddle.angle + aiPaddleArc / 2;
+  const halfThickness = PADDLE_THICKNESS / 2;
+  const angleToPaddle = angleDifference(ballAngle, aiPaddle.angle);
+  const withinArc = Math.abs(angleToPaddle) <= aiPaddleArc / 2;
+  const withinRadius = dist >= aiPaddleRadius - halfThickness - ballRadius &&
+                       dist <= aiPaddleRadius + halfThickness + ballRadius;
+  if (withinArc && withinRadius) {
+    const edgeFactor = Math.abs(angleToPaddle) / (aiPaddleArc / 2);
+    const deflectAngle = ballAngle + Math.PI + (angleToPaddle * edgeFactor * 0.5);
+    return { hit: true, edgeHit: false, deflectAngle: deflectAngle };
+  }
+  const startCapX = centerX + Math.cos(paddleStart) * aiPaddleRadius;
+  const startCapY = centerY + Math.sin(paddleStart) * aiPaddleRadius;
+  const dxStart = ballX - startCapX;
+  const dyStart = ballY - startCapY;
+  const distStart = Math.sqrt(dxStart * dxStart + dyStart * dyStart);
+  if (distStart <= halfThickness + ballRadius) {
+    const deflectAngle = Math.atan2(dyStart, dxStart);
+    return { hit: true, edgeHit: true, deflectAngle: deflectAngle };
+  }
+  const endCapX = centerX + Math.cos(paddleEnd) * aiPaddleRadius;
+  const endCapY = centerY + Math.sin(paddleEnd) * aiPaddleRadius;
+  const dxEnd = ballX - endCapX;
+  const dyEnd = ballY - endCapY;
+  const distEnd = Math.sqrt(dxEnd * dxEnd + dyEnd * dyEnd);
+  if (distEnd <= halfThickness + ballRadius) {
+    const deflectAngle = Math.atan2(dyEnd, dxEnd);
+    return { hit: true, edgeHit: true, deflectAngle: deflectAngle };
+  }
+  return { hit: false, edgeHit: false, deflectAngle: 0 };
 }
 
 // === GAME LOGIC ===
@@ -1485,10 +2055,12 @@ function update(dt) {
   updateCombo(dt);
   updateScorePopups(dt);
   updatePaddleTrail();
+  updateWave(dt);
   checkMilestones();
-  sendScoreUpdate();
+  updateAIPaddles(dt);
+  updateAIRingSwitches(dt);
 
-  const intensity = Math.min(1, (balls.length / 10) + (specialBall ? 0.2 : 0));
+  const intensity = Math.min(1, (balls.length / 10) + (waveActive ? 0.3 : 0) + (specialBall ? 0.2 : 0));
   AudioSystem.setMusicIntensity(intensity);
 
   activePowerups = activePowerups.filter(pu => pu.endTime > gameTime);
@@ -1499,11 +2071,6 @@ function update(dt) {
 
   const currentPaddleSpeed = getCurrentPaddleSpeed();
   const ballSpeedMult = getBallSpeedMultiplier();
-
-  // Update AI paddles
-  for (const ai of aiPaddles) {
-    ai.update(dt);
-  }
 
   let desiredDirection = 0;
   if (keysDown.clockwise && !keysDown.counterClockwise) {
@@ -1552,6 +2119,15 @@ function update(dt) {
     }
   }
 
+  // Resolve paddle collisions after all paddle positions are updated
+  resolvePaddleCollisions(dt);
+
+  // Update paddle proximity detection (for pre-contact force field effect)
+  updatePaddleProximities();
+
+  // Audio feedback for proximity tension and clashes
+  updateCollisionAudio();
+
   if (specialBall === null) {
     specialBallTimer += dt;
     if (specialBallTimer >= SPECIAL_BALL_SPAWN_INTERVAL) {
@@ -1560,7 +2136,8 @@ function update(dt) {
     }
   }
 
-  spawnTimer += dt * 1000;
+  const waveSpawnMult = getWaveSpawnRate();
+  spawnTimer += dt * 1000 * waveSpawnMult;
   if (spawnTimer >= SPAWN_INTERVAL) {
     if (Math.random() < POWERUP_SPAWN_CHANCE) {
       spawnPowerup();
@@ -1568,6 +2145,9 @@ function update(dt) {
       spawnBall();
     }
     spawnTimer = 0;
+    if (waveActive && waveType === 'BOSS' && specialBall === null && Math.random() < 0.3) {
+      spawnSpecialBall();
+    }
   }
 
   // Update special ball
@@ -1621,7 +2201,8 @@ function update(dt) {
       if (dist <= SPECIAL_BALL_CAPTURE_RADIUS) {
         const returnBonus = Math.floor(specialBall.returnTime * 20 * getPointsMultiplier() * getComboMultiplier());
         if (returnBonus > 0) {
-          score += returnBonus;
+          playerScore += returnBonus;
+          score = playerScore;
           scoreDisplay.textContent = score;
           spawnScorePopup(centerX, centerY - 30, returnBonus, '#00ff00');
         }
@@ -1630,7 +2211,6 @@ function update(dt) {
         spawnExplosion(centerX, centerY, '#00ff00', 2);
         spawnRingBurst(centerX, centerY, arenaRadius * 0.3, '#00ff00', 50);
         triggerScreenShake(15);
-        sendTickerMessage(`RED BALL captured! +${returnBonus} bonus!`, 'celebration');
         specialBall = null;
         specialBallTimer = 0;
         specialBallClaimTime = 0;
@@ -1672,23 +2252,13 @@ function update(dt) {
     }
 
     if (ballRadius > 2 && specialBall.hitCooldown <= 0) {
-      // Check player paddle collision
-      let collision = checkPaddleCollision(specialBall.x, specialBall.y, ballRadius);
+      let specialHit = false;
 
-      // Check AI paddle collisions if player didn't hit
-      if (!collision.hit) {
-        for (const ai of aiPaddles) {
-          const aiCollision = ai.checkCollision(specialBall.x, specialBall.y, ballRadius);
-          if (aiCollision.hit) {
-            collision = aiCollision;
-            collision.isPlayer = false;
-            collision.aiPaddle = ai;
-            break;
-          }
-        }
-      }
+      // Check player paddle collision
+      const collision = checkPaddleCollision(specialBall.x, specialBall.y, ballRadius);
 
       if (collision.hit) {
+        specialHit = true;
         if (specialBallReadyToReturn && !specialBallReturning) {
           specialBallReturning = true;
           AudioSystem.playReturnActivated();
@@ -1696,10 +2266,8 @@ function update(dt) {
           triggerScreenShake(10);
         }
 
-        const momentumBoost = collision.isPlayer ?
-          1 + Math.min(Math.abs(paddleVelocity) * 0.15, BALL_MOMENTUM_BOOST - 1) :
-          1 + Math.min(Math.abs(collision.aiPaddle?.velocity || 0) * 0.15, BALL_MOMENTUM_BOOST - 1);
-        const transferBoost = (collision.isPlayer && ringSwitchProgress > 0) ? TRANSFER_SPEED_BOOST : 1;
+        const momentumBoost = 1 + Math.min(Math.abs(paddleVelocity) * 0.15, BALL_MOMENTUM_BOOST - 1);
+        const transferBoost = ringSwitchProgress > 0 ? TRANSFER_SPEED_BOOST : 1;
         const speed = BALL_SPEED * 0.8 * momentumBoost * transferBoost;
 
         specialBall.vx = Math.cos(collision.deflectAngle) * speed;
@@ -1707,51 +2275,65 @@ function update(dt) {
         specialBall.speedMult = momentumBoost * transferBoost;
         specialBall.hitCooldown = 0.1;
         specialBall.shrinkProgress = 0;
-        specialBall.lastHitBy = collision.isPlayer ? 'player' : collision.aiPaddle?.name;
 
-        if (collision.isPlayer) {
-          playerSaves++;
-          const basePoints = 50;
-          const ageBonus = getAgeBonus(specialBall.age);
-          const edgeBonus = collision.edgeHit ? EDGE_HIT_BONUS * 2 : 0;
-          const speedBonus = momentumBoost > 1.3 ? Math.floor((momentumBoost - 1) * SPEED_HIT_BONUS * 2) : 0;
+        const basePoints = 50;
+        const ageBonus = getAgeBonus(specialBall.age);
+        const edgeBonus = collision.edgeHit ? EDGE_HIT_BONUS * 2 : 0;
+        const speedBonus = momentumBoost > 1.3 ? Math.floor((momentumBoost - 1) * SPEED_HIT_BONUS * 2) : 0;
 
-          let transferBonus = 0;
-          if (ringSwitchProgress > 0) {
-            transferBonus = TRANSFER_HIT_BONUS * 2;
-            const spinDirection = ringSwitchTo === 0 ? 1 : -1;
-            specialBall.spin = TRANSFER_SPIN * spinDirection;
-          }
+        let transferBonus = 0;
+        if (ringSwitchProgress > 0) {
+          transferBonus = TRANSFER_HIT_BONUS * 2;
+          const spinDirection = ringSwitchTo === 0 ? 1 : -1;
+          specialBall.spin = TRANSFER_SPIN * spinDirection;
+        }
 
-          const totalPoints = Math.floor((basePoints + ageBonus + edgeBonus + speedBonus + transferBonus) * getPointsMultiplier() * getComboMultiplier());
-          incrementCombo();
-          score += totalPoints;
-          scoreDisplay.textContent = score;
-          spawnScorePopup(specialBall.x, specialBall.y, totalPoints, '#ff4444');
+        const totalPoints = Math.floor((basePoints + ageBonus + edgeBonus + speedBonus + transferBonus) * getPointsMultiplier() * getComboMultiplier());
+        incrementCombo();
+        playerScore += totalPoints;
+        score = playerScore;
+        scoreDisplay.textContent = score;
+        spawnScorePopup(specialBall.x, specialBall.y, totalPoints, '#ff4444');
 
-          spawnExplosion(specialBall.x, specialBall.y, '#ff0000', 1 + momentumBoost * 0.5);
-          triggerScreenShake(5 + momentumBoost * 3);
-          AudioSystem.playBassHit(1 + momentumBoost * 0.5);
-          AudioSystem.playSpecialHit(collision.edgeHit, momentumBoost);
-        } else {
-          // AI hit
-          const ai = collision.aiPaddle;
-          ai.recordSave();
-          incrementCombo();
+        spawnExplosion(specialBall.x, specialBall.y, '#ff0000', 1 + momentumBoost * 0.5);
+        triggerScreenShake(5 + momentumBoost * 3);
+        AudioSystem.playBassHit(1 + momentumBoost * 0.5);
+        AudioSystem.playSpecialHit(collision.edgeHit, momentumBoost);
+      }
 
-          // AI hits give reduced points
-          const basePoints = 25;
-          const totalPoints = Math.floor(basePoints * getPointsMultiplier() * getComboMultiplier());
-          score += totalPoints;
-          scoreDisplay.textContent = score;
-          spawnScorePopup(specialBall.x, specialBall.y, totalPoints, ai.color);
+      // Check AI paddle collisions for special ball
+      if (!specialHit) {
+        for (const ai of AI_PADDLES) {
+          const aiCollision = checkAIPaddleCollision(specialBall.x, specialBall.y, ballRadius, ai);
+          if (aiCollision.hit) {
+            specialHit = true;
+            if (specialBallReadyToReturn && !specialBallReturning) {
+              specialBallReturning = true;
+              AudioSystem.playReturnActivated();
+              spawnRingBurst(centerX, centerY, arenaRadius * 0.4, ai.color, 40);
+              triggerScreenShake(10);
+            }
 
-          spawnExplosion(specialBall.x, specialBall.y, ai.color, 0.8);
-          triggerScreenShake(4);
-          AudioSystem.playAIHit(ai.color);
+            const momentumBoost = 1 + Math.min(Math.abs(ai.velocity) * 0.15, BALL_MOMENTUM_BOOST - 1);
+            const speed = BALL_SPEED * 0.8 * momentumBoost;
 
-          if (ai.streakSaves === 5) {
-            sendTickerMessage(`${ai.name} is on fire! 5 saves in a row!`, 'info');
+            specialBall.vx = Math.cos(aiCollision.deflectAngle) * speed;
+            specialBall.vy = Math.sin(aiCollision.deflectAngle) * speed;
+            specialBall.speedMult = momentumBoost;
+            specialBall.hitCooldown = 0.1;
+            specialBall.shrinkProgress = 0;
+
+            const basePoints = 50;
+            const ageBonus = getAgeBonus(specialBall.age);
+            const edgeBonus = aiCollision.edgeHit ? EDGE_HIT_BONUS * 2 : 0;
+            const totalPoints = Math.floor((basePoints + ageBonus + edgeBonus) * 1);
+
+            ai.score += totalPoints;
+
+            spawnScorePopup(specialBall.x, specialBall.y, totalPoints, ai.color);
+            spawnExplosion(specialBall.x, specialBall.y, ai.color, 0.8 + momentumBoost * 0.3);
+            AudioSystem.playSpecialHit(aiCollision.edgeHit, momentumBoost * 0.6);
+            break;
           }
         }
       }
@@ -1780,21 +2362,7 @@ function update(dt) {
     const puRadius = POWERUP_RADIUS * easeOut;
 
     if (!pu.escaped) {
-      // Check player collision
-      let collision = checkPaddleCollision(pu.x, pu.y, puRadius);
-
-      // Check AI collisions if player didn't hit
-      if (!collision.hit) {
-        for (const ai of aiPaddles) {
-          const aiCollision = ai.checkCollision(pu.x, pu.y, puRadius);
-          if (aiCollision.hit) {
-            collision = aiCollision;
-            collision.isPlayer = false;
-            break;
-          }
-        }
-      }
-
+      const collision = checkPaddleCollision(pu.x, pu.y, puRadius);
       if (collision.hit) {
         const config = POWERUP_TYPES[pu.type];
         const isNegative = config.negative;
@@ -1806,12 +2374,11 @@ function update(dt) {
           AudioSystem.playPowerupGood();
           triggerScreenShake(3);
           spawnExplosion(pu.x, pu.y, config.color, 0.8);
-          if (collision.isPlayer) {
-            const bonus = 25;
-            score += bonus;
-            scoreDisplay.textContent = score;
-            spawnScorePopup(pu.x, pu.y, bonus, config.color);
-          }
+          const bonus = 25;
+          playerScore += bonus;
+          score = playerScore;
+          scoreDisplay.textContent = score;
+          spawnScorePopup(pu.x, pu.y, bonus, config.color);
         }
         activatePowerup(pu.type);
         powerups.splice(i, 1);
@@ -1867,90 +2434,91 @@ function update(dt) {
     const dist = Math.sqrt(dx * dx + dy * dy);
 
     if (ball.hitCooldown <= 0 && !ball.escaped) {
+      let ballHit = false;
+
       // Check player paddle collision
-      let collision = checkPaddleCollision(ball.x, ball.y, ballRadius);
-
-      // Check AI paddle collisions if player didn't hit
-      if (!collision.hit) {
-        for (const ai of aiPaddles) {
-          const aiCollision = ai.checkCollision(ball.x, ball.y, ballRadius);
-          if (aiCollision.hit) {
-            collision = aiCollision;
-            collision.isPlayer = false;
-            collision.aiPaddle = ai;
-            break;
-          }
-        }
-      }
-
+      const collision = checkPaddleCollision(ball.x, ball.y, ballRadius);
       if (collision.hit) {
-        const momentumBoost = collision.isPlayer ?
-          1 + Math.min(Math.abs(paddleVelocity) * 0.15, BALL_MOMENTUM_BOOST - 1) :
-          1 + Math.min(Math.abs(collision.aiPaddle?.velocity || 0) * 0.15, BALL_MOMENTUM_BOOST - 1);
-        const transferBoost = (collision.isPlayer && ringSwitchProgress > 0) ? TRANSFER_SPEED_BOOST : 1;
-        const speed = BALL_SPEED * momentumBoost * transferBoost;
+        ballHit = true;
+        const momentumBoost = 1 + Math.min(Math.abs(paddleVelocity) * 0.15, BALL_MOMENTUM_BOOST - 1);
+        const transferBoost = ringSwitchProgress > 0 ? TRANSFER_SPEED_BOOST : 1;
+        const waveSpeed = getWaveBallSpeed();
+        const speed = BALL_SPEED * momentumBoost * transferBoost * waveSpeed;
 
         ball.vx = Math.cos(collision.deflectAngle) * speed;
         ball.vy = Math.sin(collision.deflectAngle) * speed;
         ball.speedMult = momentumBoost * transferBoost;
         ball.hitCooldown = 0.1;
-        ball.lastHitBy = collision.isPlayer ? 'player' : collision.aiPaddle?.name;
 
-        if (collision.isPlayer) {
-          playerSaves++;
-          const basePoints = 10;
-          const ageBonus = getAgeBonus(ball.age);
-          const edgeBonus = collision.edgeHit ? EDGE_HIT_BONUS : 0;
-          const speedBonus = momentumBoost > 1.3 ? Math.floor((momentumBoost - 1) * SPEED_HIT_BONUS) : 0;
+        const basePoints = 10;
+        const ageBonus = getAgeBonus(ball.age);
+        const edgeBonus = collision.edgeHit ? EDGE_HIT_BONUS : 0;
+        const speedBonus = momentumBoost > 1.3 ? Math.floor((momentumBoost - 1) * SPEED_HIT_BONUS) : 0;
 
-          let transferBonus = 0;
-          if (ringSwitchProgress > 0) {
-            transferBonus = TRANSFER_HIT_BONUS;
-            const spinDirection = ringSwitchTo === 0 ? 1 : -1;
-            ball.spin = TRANSFER_SPIN * spinDirection;
+        let transferBonus = 0;
+        if (ringSwitchProgress > 0) {
+          transferBonus = TRANSFER_HIT_BONUS;
+          const spinDirection = ringSwitchTo === 0 ? 1 : -1;
+          ball.spin = TRANSFER_SPIN * spinDirection;
+        }
+
+        const totalPoints = Math.floor((basePoints + ageBonus + edgeBonus + speedBonus + transferBonus) * getPointsMultiplier() * getComboMultiplier());
+        incrementCombo();
+        playerScore += totalPoints;
+        score = playerScore;
+        scoreDisplay.textContent = score;
+
+        const popupColor = combo >= 5 ? getComboColor() : '#fff';
+        spawnScorePopup(ball.x, ball.y, totalPoints, popupColor);
+        const particleColor = collision.edgeHit ? '#ffff00' : '#00ffff';
+        spawnExplosion(ball.x, ball.y, particleColor, 0.5 + momentumBoost * 0.3);
+        triggerScreenShake(2 + momentumBoost * 2);
+        if (momentumBoost > 1.3) {
+          AudioSystem.playBassHit(momentumBoost - 1);
+        }
+        AudioSystem.playPaddleHit(collision.edgeHit, momentumBoost);
+      }
+
+      // Check AI paddle collisions
+      if (!ballHit) {
+        for (const ai of AI_PADDLES) {
+          const aiCollision = checkAIPaddleCollision(ball.x, ball.y, ballRadius, ai);
+          if (aiCollision.hit) {
+            ballHit = true;
+            const momentumBoost = 1 + Math.min(Math.abs(ai.velocity) * 0.15, BALL_MOMENTUM_BOOST - 1);
+            const waveSpeed = getWaveBallSpeed();
+            const speed = BALL_SPEED * momentumBoost * waveSpeed;
+
+            ball.vx = Math.cos(aiCollision.deflectAngle) * speed;
+            ball.vy = Math.sin(aiCollision.deflectAngle) * speed;
+            ball.speedMult = momentumBoost;
+            ball.hitCooldown = 0.1;
+
+            const basePoints = 10;
+            const ageBonus = getAgeBonus(ball.age);
+            const edgeBonus = aiCollision.edgeHit ? EDGE_HIT_BONUS : 0;
+            const totalPoints = Math.floor((basePoints + ageBonus + edgeBonus) * 1);
+
+            ai.score += totalPoints;
+
+            spawnScorePopup(ball.x, ball.y, totalPoints, ai.color);
+            spawnExplosion(ball.x, ball.y, ai.color, 0.4 + momentumBoost * 0.2);
+            AudioSystem.playPaddleHit(aiCollision.edgeHit, momentumBoost * 0.6);
+            break;
           }
-
-          const totalPoints = Math.floor((basePoints + ageBonus + edgeBonus + speedBonus + transferBonus) * getPointsMultiplier() * getComboMultiplier());
-          incrementCombo();
-          score += totalPoints;
-          scoreDisplay.textContent = score;
-
-          const popupColor = combo >= 5 ? getComboColor() : '#fff';
-          spawnScorePopup(ball.x, ball.y, totalPoints, popupColor);
-          const particleColor = collision.edgeHit ? '#ffff00' : '#00ffff';
-          spawnExplosion(ball.x, ball.y, particleColor, 0.5 + momentumBoost * 0.3);
-          triggerScreenShake(2 + momentumBoost * 2);
-          if (momentumBoost > 1.3) {
-            AudioSystem.playBassHit(momentumBoost - 1);
-          }
-          AudioSystem.playPaddleHit(collision.edgeHit, momentumBoost);
-        } else {
-          // AI hit - reduced points
-          const ai = collision.aiPaddle;
-          ai.recordSave();
-          incrementCombo();
-
-          const basePoints = 5;
-          const totalPoints = Math.floor(basePoints * getPointsMultiplier() * getComboMultiplier());
-          score += totalPoints;
-          scoreDisplay.textContent = score;
-          spawnScorePopup(ball.x, ball.y, totalPoints, ai.color);
-
-          spawnExplosion(ball.x, ball.y, ai.color, 0.4);
-          triggerScreenShake(2);
-          AudioSystem.playAIHit(ai.color);
         }
       }
     }
 
-    if (!ball.escaped && !ball.nearMissTriggered && collision?.isPlayer !== false) {
+    if (!ball.escaped && !ball.nearMissTriggered) {
       const nearMissIntensity = checkNearMiss(ball.x, ball.y, ballRadius);
       if (nearMissIntensity > 0.3) {
         ball.nearMissTriggered = true;
         AudioSystem.playNearMiss(nearMissIntensity);
         const nearMissPoints = Math.floor(nearMissIntensity * 5);
         if (nearMissPoints > 0) {
-          score += nearMissPoints;
+          playerScore += nearMissPoints;
+          score = playerScore;
           spawnScorePopup(ball.x, ball.y, nearMissPoints, '#ff8800');
           spawnParticles(ball.x, ball.y, 5, '#ff8800', 50, 2, 0.2);
         }
@@ -1976,12 +2544,18 @@ function update(dt) {
 function draw() {
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  // Only draw game elements when running
-  if (!gameRunning) return;
-
   ctx.save();
   ctx.translate(screenShake.x, screenShake.y);
+
+  if (waveActive) {
+    const waveProgress = waveTimer / WAVE_DURATION;
+    const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, arenaRadius * 1.5);
+    const alpha = 0.15 * (1 - waveProgress);
+    gradient.addColorStop(0, `rgba(255, 0, 0, ${alpha})`);
+    gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
 
   let maxDanger = 0;
   for (const ball of balls) {
@@ -2038,12 +2612,6 @@ function draw() {
 
   drawPaddleTrail();
 
-  // Draw AI paddles
-  for (const ai of aiPaddles) {
-    ai.draw();
-  }
-
-  // Draw player paddle
   const paddleRadius = getCurrentPaddleRadius();
   const paddleScale = getPaddleTransitionScale();
   const currentThickness = PADDLE_THICKNESS * paddleScale;
@@ -2051,32 +2619,145 @@ function draw() {
 
   if (currentThickness > 0.5 && currentArc > 0.01) {
     const velocityGlow = Math.min(Math.abs(paddleVelocity) / PADDLE_SPEED, 1);
-    ctx.shadowBlur = 10 + velocityGlow * 15;
-    ctx.shadowColor = combo >= 5 ? getComboColor() : `rgba(0, 255, 255, ${0.5 + velocityGlow * 0.5})`;
+    const inContact = isPlayerInContact();
+    const proximityIntensity = getPlayerProximityIntensity();
 
-    if (combo >= 25) {
-      ctx.strokeStyle = getComboColor();
+    // Enhanced glow based on velocity, contact, and proximity
+    const contactGlow = inContact ? 15 : 0;
+    const proximityGlow = proximityIntensity * 12;
+    ctx.shadowBlur = 10 + velocityGlow * 15 + contactGlow + proximityGlow;
+
+    // Color changes based on state
+    let paddleColor = '#fff';
+    let glowColor = `rgba(0, 255, 255, ${0.5 + velocityGlow * 0.5})`;
+
+    if (inContact) {
+      // Subtle warm tint when in contact - not too dramatic
+      paddleColor = '#fffaf0';
+      glowColor = `rgba(255, 200, 150, 0.8)`;
+    } else if (proximityIntensity > 0) {
+      // Subtle repulsion glow when approaching
+      const glow = proximityIntensity * 0.3;
+      paddleColor = `rgb(${255}, ${Math.floor(255 - glow * 30)}, ${Math.floor(255 - glow * 50)})`;
+      glowColor = `rgba(255, 220, 180, ${0.4 + proximityIntensity * 0.4})`;
+    } else if (combo >= 25) {
+      paddleColor = getComboColor();
+      glowColor = getComboColor();
     } else if (ringSwitchProgress > 0) {
-      ctx.strokeStyle = '#00ffff';
-    } else {
-      ctx.strokeStyle = '#fff';
+      paddleColor = '#00ffff';
     }
 
+    ctx.shadowColor = glowColor;
+    ctx.strokeStyle = paddleColor;
     ctx.lineWidth = currentThickness;
     ctx.lineCap = 'round';
     ctx.beginPath();
     ctx.arc(centerX, centerY, paddleRadius, paddleAngle - currentArc / 2, paddleAngle + currentArc / 2);
     ctx.stroke();
+
     ctx.shadowBlur = 0;
 
-    // Draw "YOU" label
-    ctx.font = '10px "Press Start 2P", monospace';
-    ctx.textAlign = 'center';
+    // Draw curved player label
+    const playerLabelRadius = paddleRadius + 22;
+    const labelText = 'YOU';
+    ctx.font = '8px "Press Start 2P", monospace';
     ctx.fillStyle = '#00ffff';
-    const labelX = centerX + Math.cos(paddleAngle) * (paddleRadius + 30);
-    const labelY = centerY + Math.sin(paddleAngle) * (paddleRadius + 30);
-    ctx.fillText('YOU', labelX, labelY);
+    ctx.shadowBlur = 3;
+    ctx.shadowColor = ctx.fillStyle;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    // Draw each character along the arc
+    const charSpacing = 0.06;
+    const totalWidth = (labelText.length - 1) * charSpacing;
+    const startAngle = paddleAngle - totalWidth / 2;
+
+    for (let i = 0; i < labelText.length; i++) {
+      const charAngle = startAngle + i * charSpacing;
+      const charX = centerX + Math.cos(charAngle) * playerLabelRadius;
+      const charY = centerY + Math.sin(charAngle) * playerLabelRadius;
+
+      ctx.save();
+      ctx.translate(charX, charY);
+      ctx.rotate(charAngle + Math.PI / 2); // Rotate to follow arc
+      ctx.fillText(labelText[i], 0, 0);
+      ctx.restore();
+    }
+    ctx.shadowBlur = 0;
   }
+
+  // Draw AI paddles
+  for (let aiIndex = 0; aiIndex < AI_PADDLES.length; aiIndex++) {
+    const ai = AI_PADDLES[aiIndex];
+    const aiPaddleRadius = getAIPaddleRadius(ai);
+    const aiPaddleArc = PADDLE_ARC_BASE;
+    const inContact = isAIInContact(aiIndex);
+    const proximityIntensity = getAIProximityIntensity(aiIndex);
+
+    const aiVelocityGlow = Math.min(Math.abs(ai.velocity) / ai.maxSpeed, 1);
+    const contactGlow = inContact ? 12 : 0;
+    const proximityGlow = proximityIntensity * 10;
+    ctx.shadowBlur = 8 + aiVelocityGlow * 10 + contactGlow + proximityGlow;
+
+    // Subtle color changes during contact or proximity
+    let aiPaddleColor = ai.color;
+    if (inContact) {
+      // Slight brightening when in contact
+      const baseColor = ai.color === '#88ff88' ? [150, 255, 150] : [255, 150, 150];
+      aiPaddleColor = `rgb(${baseColor[0]}, ${baseColor[1]}, ${baseColor[2]})`;
+    } else if (proximityIntensity > 0) {
+      // Subtle warming when approaching
+      const baseColor = ai.color === '#88ff88' ? [136, 255, 136] : [255, 136, 136];
+      const r = Math.floor(baseColor[0] + proximityIntensity * 20);
+      const g = Math.floor(baseColor[1] + proximityIntensity * 10);
+      const b = Math.floor(baseColor[2]);
+      aiPaddleColor = `rgb(${Math.min(255, r)}, ${Math.min(255, g)}, ${b})`;
+    }
+
+    ctx.shadowColor = aiPaddleColor;
+    ctx.strokeStyle = aiPaddleColor;
+    ctx.lineWidth = PADDLE_THICKNESS * 0.85;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, aiPaddleRadius, ai.angle - aiPaddleArc / 2, ai.angle + aiPaddleArc / 2);
+    ctx.stroke();
+
+    ctx.shadowBlur = 0;
+
+    // Draw curved AI label
+    const aiLabelRadius = aiPaddleRadius + 22;
+    const labelText = ai.name;
+    ctx.font = '8px "Press Start 2P", monospace';
+    ctx.fillStyle = ai.color;
+    ctx.shadowBlur = 3;
+    ctx.shadowColor = ctx.fillStyle;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    // Draw each character along the arc
+    const charSpacing = 0.055;
+    const totalWidth = (labelText.length - 1) * charSpacing;
+    const startAngle = ai.angle - totalWidth / 2;
+
+    for (let i = 0; i < labelText.length; i++) {
+      const charAngle = startAngle + i * charSpacing;
+      const charX = centerX + Math.cos(charAngle) * aiLabelRadius;
+      const charY = centerY + Math.sin(charAngle) * aiLabelRadius;
+
+      ctx.save();
+      ctx.translate(charX, charY);
+      ctx.rotate(charAngle + Math.PI / 2);
+      ctx.fillText(labelText[i], 0, 0);
+      ctx.restore();
+    }
+    ctx.shadowBlur = 0;
+  }
+
+  // Draw proximity force field effects (paddles approaching)
+  drawProximityEffects();
+
+  // Draw clash effects (tension glow, sparks)
+  drawClashEffects();
 
   // Draw regular balls
   for (const ball of balls) {
@@ -2261,6 +2942,47 @@ function draw() {
     ctx.shadowBlur = 0;
   }
 
+  if (waveActive) {
+    ctx.font = '14px "Press Start 2P", monospace';
+    ctx.textAlign = 'center';
+    const waveAlpha = 0.5 + Math.sin(gameTime * 6) * 0.5;
+    ctx.fillStyle = `rgba(255, 0, 0, ${waveAlpha})`;
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = '#ff0000';
+    ctx.fillText(`WAVE ${currentWave}: ${waveType}`, centerX, centerY + arenaRadius + 40);
+    ctx.shadowBlur = 0;
+  }
+
+  // Draw mini scoreboard in top right corner
+  ctx.save();
+  ctx.translate(-screenShake.x, -screenShake.y); // Undo shake for UI
+
+  const scoreboardPadding = 15;
+  const scoreboardX = canvas.width - scoreboardPadding;
+  const scoreboardY = scoreboardPadding + 12; // +12 for font baseline
+  const lineHeight = 20;
+
+  ctx.font = '11px "Press Start 2P", monospace';
+  ctx.textAlign = 'right';
+
+  // Player score (white/cyan)
+  ctx.fillStyle = '#00ffff';
+  ctx.shadowBlur = 5;
+  ctx.shadowColor = '#00ffff';
+  ctx.fillText(`YOU: ${playerScore}`, scoreboardX, scoreboardY);
+
+  // AI scores
+  let yOffset = lineHeight;
+  for (const ai of AI_PADDLES) {
+    ctx.fillStyle = ai.color;
+    ctx.shadowColor = ai.color;
+    ctx.fillText(`${ai.name}: ${ai.score}`, scoreboardX, scoreboardY + yOffset);
+    yOffset += lineHeight;
+  }
+
+  ctx.shadowBlur = 0;
+  ctx.restore();
+
   ctx.restore();
 }
 
@@ -2282,7 +3004,7 @@ function startGame() {
   AudioSystem.init();
 
   score = 0;
-  playerSaves = 0;
+  playerScore = 0;
   balls = [];
   powerups = [];
   activePowerups = [];
@@ -2303,26 +3025,34 @@ function startGame() {
   specialBallClaimTime = 0;
   specialBallForceCapture = false;
   gameRunning = true;
-  lastScoreUpdateTime = Date.now();
+
+  // Reset AI paddles
+  AI_PADDLES[0].angle = Math.PI / 6;
+  AI_PADDLES[0].velocity = 0;
+  AI_PADDLES[0].score = 0;
+  AI_PADDLES[0].ring = 0;
+  AI_PADDLES[1].angle = Math.PI - Math.PI / 6;
+  AI_PADDLES[1].velocity = 0;
+  AI_PADDLES[1].score = 0;
+  AI_PADDLES[1].ring = 0;
 
   particles.length = 0;
   scorePopups.length = 0;
   paddleTrail.length = 0;
+  paddleContacts = [];
   combo = 0;
   maxCombo = 0;
   lastHitTime = 0;
+  currentWave = 0;
+  waveTimer = 0;
+  waveActive = false;
   screenShake = { x: 0, y: 0, intensity: 0 };
   sentMessages.clear();
 
-  // Initialize AI paddles
-  aiPaddles = AI_PLAYERS.map((config, index) => new AIPaddle(config, index));
-
   scoreDisplay.textContent = '0';
   gameOverScreen.classList.add('hidden');
-  if (startScreen) startScreen.classList.add('hidden');
 
   AudioSystem.startMusic();
-  sendGameStart();
 
   setTimeout(() => {
     if (gameRunning) spawnBall();
@@ -2343,48 +3073,21 @@ function endGame() {
   spawnRingBurst(centerX, centerY, arenaRadius, '#ff0000', 60);
   triggerScreenShake(20);
 
-  finalScoreDisplay.textContent = score;
-
-  // Build leaderboard data
-  const leaderboardData = [
-    { name: 'YOU', saves: playerSaves, color: '#0ff', isPlayer: true },
-    ...aiPaddles.map(ai => ({ name: ai.name, saves: ai.saves, color: ai.color, isPlayer: false }))
-  ];
-
-  // Sort by saves descending
-  leaderboardData.sort((a, b) => b.saves - a.saves);
-
-  // Populate leaderboard
-  if (leaderboardEntries) {
-    leaderboardEntries.innerHTML = leaderboardData.map((entry, index) => `
-      <div class="leaderboard-entry ${entry.isPlayer ? 'player' : ''}" style="color: ${entry.color}">
-        <span class="rank">#${index + 1}</span>
-        <span class="name">${entry.name}</span>
-        <span class="saves">${entry.saves} saves</span>
-      </div>
-    `).join('');
-  }
-
+  finalScoreDisplay.textContent = playerScore;
   gameOverScreen.classList.remove('hidden');
 
-  // Calculate local high score
-  if (score > highScore) {
-    highScore = score;
-    localStorage.setItem('orbit_solo_highscore', highScore);
+  if (playerScore > highScore) {
+    highScore = playerScore;
+    localStorage.setItem('orbit_highscore', highScore);
     updateHighScoreDisplay();
   }
 
-  sendGameOver();
   updateRingSwitchButton();
 }
 
 // === EVENT LISTENERS ===
 
 restartBtn.addEventListener('click', startGame);
-
-if (startBtn) {
-  startBtn.addEventListener('click', startGame);
-}
 
 if (infoBtn && infoPanel && infoCloseBtn) {
   infoBtn.addEventListener('click', () => {
@@ -2401,6 +3104,15 @@ if (infoBtn && infoPanel && infoCloseBtn) {
 }
 
 if (ringSwitchBtn) {
+  // Use touchstart for faster response on mobile (no 300ms delay)
+  ringSwitchBtn.addEventListener('touchstart', (e) => {
+    e.preventDefault(); // Prevent ghost click
+    if (gameRunning) {
+      switchRing();
+    }
+  }, { passive: false });
+
+  // Fallback click handler for non-touch devices
   ringSwitchBtn.addEventListener('click', () => {
     if (gameRunning) {
       switchRing();
@@ -2421,12 +3133,15 @@ function updateRingSwitchButton() {
 // === INITIALIZATION ===
 
 // Load high score from local storage
-const savedHighScore = localStorage.getItem('orbit_solo_highscore');
+const savedHighScore = localStorage.getItem('orbit_highscore');
 if (savedHighScore) {
   highScore = parseInt(savedHighScore, 10);
   updateHighScoreDisplay();
 }
 
-// Start the game loop (renders start screen)
+// Start the game loop
 lastTime = performance.now();
 requestAnimationFrame(gameLoop);
+
+// Auto-start the game
+startGame();

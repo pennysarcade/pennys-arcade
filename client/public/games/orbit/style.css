@@ -1,0 +1,241 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: #000;
+  overflow: hidden;
+  font-family: 'VT323', monospace;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#gameCanvas {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+}
+
+#ui {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  pointer-events: none;
+  z-index: 10;
+}
+
+#score {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 32px;
+  color: #fff;
+}
+
+#high-score {
+  font-family: 'VT323', monospace;
+  font-size: 18px;
+  color: #666;
+  margin-top: 5px;
+}
+
+/* Game over screen */
+#game-over-screen {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  color: #fff;
+  z-index: 100;
+}
+
+#game-over-screen h1 {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 48px;
+  color: #fff;
+  margin-bottom: 30px;
+}
+
+#game-over-screen p {
+  font-size: 24px;
+  margin-bottom: 15px;
+}
+
+/* Info button */
+#info-btn {
+  position: fixed;
+  bottom: 15px;
+  left: 15px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #888;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 14px;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#info-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+/* Info panel */
+#info-panel {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.95);
+  border: 2px solid #444;
+  border-radius: 12px;
+  padding: 30px 40px;
+  text-align: center;
+  color: #fff;
+  z-index: 150;
+  max-width: 90vw;
+}
+
+#info-panel h2 {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 32px;
+  color: #fff;
+  margin-bottom: 20px;
+}
+
+#info-panel p {
+  font-size: 20px;
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+
+#info-panel .controls {
+  color: #888;
+  font-size: 16px;
+}
+
+#info-panel .info-tip {
+  color: #ff4444;
+  font-size: 14px;
+  margin-top: 15px;
+}
+
+#info-close-btn {
+  margin-top: 20px;
+  font-size: 12px;
+  padding: 10px 20px;
+}
+
+button {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 16px;
+  padding: 15px 30px;
+  margin-top: 20px;
+  background: #fff;
+  border: none;
+  color: #000;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #ccc;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* Mobile ring switch button */
+#ring-switch-btn {
+  position: fixed;
+  bottom: 30px;
+  right: 30px;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: rgba(0, 255, 255, 0.15);
+  border: 3px solid rgba(0, 255, 255, 0.7);
+  color: #00ffff;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 9px;
+  cursor: pointer;
+  z-index: 100;
+  display: none;
+  box-shadow: 0 0 20px rgba(0, 255, 255, 0.3), inset 0 0 15px rgba(0, 255, 255, 0.1);
+  transition: transform 0.1s ease, background 0.1s ease, box-shadow 0.1s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#ring-switch-btn:active {
+  background: rgba(0, 255, 255, 0.4);
+  transform: scale(0.9);
+  box-shadow: 0 0 30px rgba(0, 255, 255, 0.6), inset 0 0 20px rgba(0, 255, 255, 0.3);
+}
+
+/* Desktop/Mobile control text visibility */
+.desktop-controls {
+  display: block;
+}
+.mobile-controls {
+  display: none;
+}
+
+/* Mobile responsive styles */
+@media (max-width: 600px) {
+  .desktop-controls {
+    display: none;
+  }
+  .mobile-controls {
+    display: block;
+  }
+
+  #ring-switch-btn {
+    display: block;
+  }
+
+  #ring-switch-btn.hidden {
+    display: none;
+  }
+
+  #score {
+    font-size: 24px;
+  }
+
+  #high-score {
+    font-size: 14px;
+  }
+
+  #info-btn {
+    width: 32px;
+    height: 32px;
+    font-size: 12px;
+  }
+
+  #info-panel {
+    padding: 20px 25px;
+  }
+
+  #info-panel h2 {
+    font-size: 24px;
+  }
+
+  #info-panel p {
+    font-size: 16px;
+  }
+
+  #info-panel .controls {
+    font-size: 14px;
+  }
+}

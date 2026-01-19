@@ -34,7 +34,12 @@ export const GAMES: GameConfig[] = [
     video: '/games/onzac/banner.webm',
     platforms: 'both',
   },
-  { id: '03', title: 'Game 03', description: 'Under construction...' },
+  {
+    id: 'orbit',
+    title: 'Orbit (Beta)',
+    description: 'Keep the balls in the ring!',
+    platforms: 'both',
+  },
   { id: '04', title: 'Game 04', description: 'Under construction...' },
   { id: '05', title: 'Game 05', description: 'Under construction...' },
   { id: '06', title: 'Game 06', description: 'Under construction...' },

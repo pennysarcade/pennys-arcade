@@ -12,7 +12,6 @@ import authRoutes from './routes/auth.js'
 import scoresRoutes from './routes/scores.js'
 import discordRoutes from './routes/discord.js'
 import { setupChatSocket } from './socket/chat.js'
-import { setupOrbitSocket } from './socket/orbit.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -97,7 +96,6 @@ async function startServer() {
 
   // Setup WebSocket handlers
   await setupChatSocket(io)
-  await setupOrbitSocket(io)
 
   const PORT = process.env.PORT || 3001
 
