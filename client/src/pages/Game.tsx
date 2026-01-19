@@ -64,7 +64,7 @@ export default function Game() {
   const tickerDisabled = gameData?.disableTickerMessages ?? false
 
   // Wrapper that respects the disableTickerMessages flag
-  const addTickerMessage = useCallback((message: string, level?: string, priority?: string) => {
+  const addTickerMessage = useCallback((message: string, level?: 'info' | 'success' | 'error' | 'celebration', priority?: 'high' | 'low') => {
     if (tickerDisabled) return
     rawAddTickerMessage(message, level, priority)
   }, [tickerDisabled, rawAddTickerMessage])
