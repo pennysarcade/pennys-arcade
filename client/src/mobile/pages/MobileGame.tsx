@@ -34,7 +34,7 @@ export default function MobileGame() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { user, token } = useAuth()
-  const { socket, addTickerMessage, tickerMessages } = useSocket()
+  const { socket, addTickerMessage: rawAddTickerMessage, tickerMessages } = useSocket()
   const [sessionId, setSessionId] = useState<number | null>(null)
   const [sessionStatus, setSessionStatus] = useState<'idle' | 'starting' | 'playing' | 'ending' | 'error'>('idle')
   const sessionStartedRef = useRef(false)
@@ -45,6 +45,17 @@ export default function MobileGame() {
   const [highScoreData, setHighScoreData] = useState<HighScoreData | null>(null)
 
   const game = id ? GAME_CONFIGS[id] : null
+
+  // Check if ticker messages are disabled for this game (e.g., beta games)
+  // See ArcadeGrid.tsx GameConfig.disableTickerMessages for the flag
+  const gameData = GAMES.find(g => g.id === id)
+  const tickerDisabled = gameData?.disableTickerMessages ?? false
+
+  // Wrapper that respects the disableTickerMessages flag
+  const addTickerMessage = useCallback((message: string, level?: 'info' | 'success' | 'error' | 'celebration', priority?: 'high' | 'low') => {
+    if (tickerDisabled) return
+    rawAddTickerMessage(message, level, priority)
+  }, [tickerDisabled, rawAddTickerMessage])
 
   const startSession = useCallback(async (gameId: string) => {
     if (!token || user?.isGuest) return null

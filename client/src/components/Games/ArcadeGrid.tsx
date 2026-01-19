@@ -15,8 +15,17 @@ export interface GameConfig {
   multiplayer?: boolean // has real-time multiplayer lobby
   maxPlayers?: number // for multiplayer games
   hidden?: boolean // hidden from game list but still accessible via direct URL
-  // TODO: Remove this flag when Orbit exits beta and has proper high score tracking
-  disableTickerMessages?: boolean // suppress session/score ticker messages for beta games
+  /**
+   * Suppress session/score ticker messages for this game.
+   * Used for beta games that don't have proper high score tracking yet.
+   *
+   * TO RE-ENABLE TICKER MESSAGES:
+   * 1. Remove `disableTickerMessages: true` from the game config below
+   * 2. Also remove "(Beta)" from the title if the game is out of beta
+   *
+   * Currently disabled for: orbit
+   */
+  disableTickerMessages?: boolean
 }
 
 export const GAMES: GameConfig[] = [
