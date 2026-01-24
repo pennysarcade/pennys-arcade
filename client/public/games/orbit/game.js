@@ -32,7 +32,7 @@ const PADDLE_ACCELERATION = 5;
 const PADDLE_DECELERATION = 12;
 const RING_SWITCH_DURATION = 0.25;
 const BALL_RADIUS = 8;
-const BALL_SPEED = 150;
+const BALL_SPEED = isMobile ? 120 : 150; // 20% slower on mobile
 const SPAWN_INTERVAL = 2000;
 
 // Game state
@@ -1823,6 +1823,23 @@ canvas.addEventListener('mouseleave', handlePointerUp);
 let lastTapTime = 0;
 const DOUBLE_TAP_THRESHOLD = 300;
 
+// Mobile touch controls: left side = CCW, right side = CW
+function handleTouchZone(x) {
+  const screenMidpoint = window.innerWidth / 2;
+  if (x < screenMidpoint) {
+    keysDown.counterClockwise = true;
+    keysDown.clockwise = false;
+  } else {
+    keysDown.clockwise = true;
+    keysDown.counterClockwise = false;
+  }
+}
+
+function clearTouchZone() {
+  keysDown.clockwise = false;
+  keysDown.counterClockwise = false;
+}
+
 canvas.addEventListener('touchstart', (e) => {
   e.preventDefault();
   const touch = e.touches[0];
@@ -1834,17 +1851,30 @@ canvas.addEventListener('touchstart', (e) => {
     lastTapTime = 0;
   } else {
     lastTapTime = now;
-    handlePointerDown(touch.clientX, touch.clientY);
+    // Use zone-based controls on mobile, drag controls on desktop
+    if (isMobile) {
+      handleTouchZone(touch.clientX);
+    } else {
+      handlePointerDown(touch.clientX, touch.clientY);
+    }
   }
 });
 canvas.addEventListener('touchmove', (e) => {
   e.preventDefault();
   const touch = e.touches[0];
-  handlePointerMove(touch.clientX, touch.clientY);
+  if (isMobile) {
+    handleTouchZone(touch.clientX);
+  } else {
+    handlePointerMove(touch.clientX, touch.clientY);
+  }
 });
 canvas.addEventListener('touchend', (e) => {
   e.preventDefault();
-  handlePointerUp();
+  if (isMobile) {
+    clearTouchZone();
+  } else {
+    handlePointerUp();
+  }
 });
 
 window.addEventListener('keydown', (e) => {
