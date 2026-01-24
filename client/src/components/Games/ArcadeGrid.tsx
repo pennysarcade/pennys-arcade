@@ -49,6 +49,8 @@ export const GAMES: GameConfig[] = [
     id: 'orbit',
     title: 'Orbit',
     description: 'Keep the balls in the ring!',
+    banner: '/games/orbit/banner.jpg',
+    video: '/games/orbit/banner.webm',
     platforms: 'both',
   },
   { id: '04', title: 'Game 04', description: 'Under construction...' },
