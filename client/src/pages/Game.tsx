@@ -22,7 +22,7 @@ const GAME_CONFIGS: Record<string, GameConfig> = {
     path: '/games/onzac/index.html'
   },
   'orbit': {
-    title: 'Orbit (Beta)',
+    title: 'Orbit',
     description: 'Keep the balls in the ring!',
     path: '/games/orbit/index.html'
   },
