@@ -14,6 +14,7 @@ const HIGH_SCORE_ANNOUNCEMENT_COOLDOWN = 10 * 60 * 1000 // 10 minutes
 const GAME_NAMES: Record<string, string> = {
   'onzac': 'ONZAC',
   'tessles': 'Tessles',
+  'orbit': 'Orbit',
 }
 
 // Games excluded from leaderboard (offline/deprecated)

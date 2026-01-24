@@ -51,7 +51,7 @@ let playerScore = 0;
 // AI Opponents
 const AI_PADDLES = [
   {
-    name: 'CHILL',
+    name: 'LENNIE',
     color: '#88ff88',
     angle: Math.PI / 6,  // 30 degrees
     velocity: 0,
@@ -60,14 +60,14 @@ const AI_PADDLES = [
     ringSwitchFrom: 0,
     ringSwitchTo: 0,
     score: 0,
-    // Chill AI: slower reactions, doesn't chase everything
+    // Lennie AI: slower reactions, doesn't chase everything
     reactionSpeed: 1.5,
     maxSpeed: 2.5,
     chaseThreshold: 0.6,  // Only chases balls within 60% of arena radius
     laziness: 0.3  // 30% chance to not react
   },
   {
-    name: 'GREED',
+    name: 'GEORGE',
     color: '#ff8888',
     angle: Math.PI - Math.PI / 6,  // 150 degrees
     velocity: 0,
@@ -76,7 +76,7 @@ const AI_PADDLES = [
     ringSwitchFrom: 0,
     ringSwitchTo: 0,
     score: 0,
-    // Aggressive AI: fast reactions, chases everything
+    // George AI: fast reactions, chases everything
     reactionSpeed: 4,
     maxSpeed: 5,
     chaseThreshold: 1.0,  // Chases all balls
@@ -98,6 +98,7 @@ let gameRunning = false;
 let lastTime = 0;
 let spawnTimer = 0;
 let gameTime = 0;
+let lastScoreUpdateTime = 0;
 
 // Special ball state
 let specialBall = null;
@@ -935,15 +936,52 @@ function checkNearMiss(ballX, ballY, ballRadius) {
 // === MILESTONE TRACKING ===
 const sentMessages = new Set();
 
+// Send ticker message to parent window
+function sendTickerMessage(message, level = 'info', priority = 'low') {
+  if (window.parent !== window) {
+    window.parent.postMessage({
+      type: 'TICKER_MESSAGE',
+      game: 'orbit',
+      message: message,
+      level: level,
+      priority: priority
+    }, '*');
+  }
+}
+
 function checkMilestones() {
-  const scoreMilestones = [1000, 2500, 5000, 10000, 25000, 50000, 100000];
+  const scoreMilestones = [
+    { score: 1000, message: 'Warming up! 1,000 points!' },
+    { score: 2500, message: 'Getting serious! 2,500 points!' },
+    { score: 5000, message: 'On fire! 5,000 points!' },
+    { score: 10000, message: 'Unstoppable! 10,000 points!' },
+    { score: 25000, message: 'Legendary! 25,000 points!' },
+    { score: 50000, message: 'GODLIKE! 50,000 points!' },
+    { score: 100000, message: 'IMPOSSIBLE! 100,000 points!' }
+  ];
   for (const milestone of scoreMilestones) {
-    const key = `score_${milestone}`;
-    if (score >= milestone && !sentMessages.has(key)) {
+    const key = `score_${milestone.score}`;
+    if (score >= milestone.score && !sentMessages.has(key)) {
       sentMessages.add(key);
       AudioSystem.playMilestone();
       spawnRingBurst(centerX, centerY, arenaRadius * 0.4, '#ffff00', 50);
       triggerScreenShake(10);
+      sendTickerMessage(milestone.message, 'celebration', 'low');
+    }
+  }
+
+  // Combo milestones
+  const comboMilestones = [
+    { combo: 10, message: '10x Combo!' },
+    { combo: 25, message: '25x MEGA Combo!' },
+    { combo: 50, message: '50x ULTRA Combo!' },
+    { combo: 100, message: '100x INSANE Combo!' }
+  ];
+  for (const milestone of comboMilestones) {
+    const key = `combo_${milestone.combo}`;
+    if (combo >= milestone.combo && !sentMessages.has(key)) {
+      sentMessages.add(key);
+      sendTickerMessage(milestone.message, 'success', 'low');
     }
   }
 }
@@ -1482,7 +1520,7 @@ function updateAIPaddles(dt) {
       }
     }
 
-    // Special ball is high priority for GREED
+    // Special ball is high priority for GEORGE
     if (specialBall && !specialBallReturning) {
       const dx = specialBall.x - centerX;
       const dy = specialBall.y - centerY;
@@ -1493,10 +1531,10 @@ function updateAIPaddles(dt) {
         const ballAngle = Math.atan2(dy, dx);
         const angleDiff = Math.abs(angleDifference(ballAngle, ai.angle));
 
-        // Special ball is worth more points, so prioritize it (especially for GREED)
+        // Special ball is worth more points, so prioritize it (especially for GEORGE)
         const urgency = normalizedDist;
         const angleScore = 1 - (angleDiff / Math.PI);
-        const specialBonus = ai.name === 'GREED' ? 2 : 0.5;
+        const specialBonus = ai.name === 'GEORGE' ? 2 : 0.5;
         const ballScore = (urgency * 2 + angleScore) * specialBonus;
 
         if (ballScore > bestScore) {
@@ -1506,7 +1544,7 @@ function updateAIPaddles(dt) {
       }
     }
 
-    // Apply laziness - sometimes the chill AI just doesn't react
+    // Apply laziness - sometimes Lennie just doesn't react
     if (Math.random() < ai.laziness * dt * 2) {
       bestBall = null;
     }
@@ -1547,7 +1585,7 @@ function updateAIPaddles(dt) {
       }
 
       // Consider switching rings if blocked (more likely for aggressive AI)
-      if (pathBlocked && Math.random() < (ai.name === 'GREED' ? 0.02 : 0.005)) {
+      if (pathBlocked && Math.random() < (ai.name === 'GEORGE' ? 0.02 : 0.005)) {
         const targetRing = ai.ring === 0 ? 1 : 0;
         // Check if the target ring is clear at this position
         let canSwitch = true;
@@ -2062,6 +2100,22 @@ function update(dt) {
   checkMilestones();
   updateAIPaddles(dt);
   updateAIRingSwitches(dt);
+
+  // Send periodic score updates to parent (every 30 seconds)
+  if (window.parent !== window && Date.now() - lastScoreUpdateTime >= 30000) {
+    lastScoreUpdateTime = Date.now();
+    window.parent.postMessage({
+      type: 'SCORE_UPDATE',
+      game: 'orbit',
+      score: playerScore,
+      stats: {
+        time: Math.floor(gameTime),
+        maxCombo: maxCombo,
+        georgeScore: AI_PADDLES[1].score,
+        lennieScore: AI_PADDLES[0].score
+      }
+    }, '*');
+  }
 
   const intensity = Math.min(1, (balls.length / 10) + (waveActive ? 0.3 : 0) + (specialBall ? 0.2 : 0));
   AudioSystem.setMusicIntensity(intensity);
@@ -3028,6 +3082,15 @@ function startGame() {
   specialBallClaimTime = 0;
   specialBallForceCapture = false;
   gameRunning = true;
+  lastScoreUpdateTime = Date.now();
+
+  // Notify parent window that a new game is starting
+  if (window.parent !== window) {
+    window.parent.postMessage({
+      type: 'GAME_START',
+      game: 'orbit'
+    }, '*');
+  }
 
   // Reset AI paddles
   AI_PADDLES[0].angle = Math.PI / 6;
@@ -3083,6 +3146,21 @@ function endGame() {
     highScore = playerScore;
     localStorage.setItem('orbit_highscore', highScore);
     updateHighScoreDisplay();
+  }
+
+  // Send score to Penny's Arcade
+  if (window.parent !== window && playerScore > 0) {
+    window.parent.postMessage({
+      type: 'GAME_OVER',
+      game: 'orbit',
+      score: playerScore,
+      stats: {
+        time: Math.floor(gameTime),
+        maxCombo: maxCombo,
+        georgeScore: AI_PADDLES[1].score,
+        lennieScore: AI_PADDLES[0].score
+      }
+    }, '*');
   }
 
   updateRingSwitchButton();

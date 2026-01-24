@@ -47,10 +47,9 @@ export const GAMES: GameConfig[] = [
   },
   {
     id: 'orbit',
-    title: 'Orbit (Beta)',
+    title: 'Orbit',
     description: 'Keep the balls in the ring!',
     platforms: 'both',
-    disableTickerMessages: true, // Beta - no high scores yet
   },
   { id: '04', title: 'Game 04', description: 'Under construction...' },
   { id: '05', title: 'Game 05', description: 'Under construction...' },
