@@ -121,7 +121,7 @@ async function startServer() {
       html = html.replace(/<meta property="og:title" content="[^"]*">/, `<meta property="og:title" content="${gameMeta.title}">`)
       html = html.replace(/<meta property="og:description" content="[^"]*">/, `<meta property="og:description" content="${gameMeta.description}">`)
       html = html.replace(/<meta property="og:image" content="[^"]*">/, `<meta property="og:image" content="${gameMeta.image}">`)
-      html = html.replace(/<meta property="og:url" content="[^"]*">/, `<meta property="og:url" content="https://pennysarcade.games/game/${gameId}">`)
+      html = html.replace(/<meta property="og:url" content="[^"]*">/, `<meta property="og:url" content="https://pennysarcade.games/${gameId}">`)
 
       // Replace Twitter meta tags
       html = html.replace(/<meta name="twitter:title" content="[^"]*">/, `<meta name="twitter:title" content="${gameMeta.title}">`)
